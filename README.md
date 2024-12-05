@@ -20,12 +20,6 @@ code analysis, manipulation, and testing workflows.
 - Framework-agnostic code file generation
 - And more...
 
-## Installation
-
-```bash
-# Installation instructions to be added
-```
-
 ## Tools
 
 - get_test_logs
