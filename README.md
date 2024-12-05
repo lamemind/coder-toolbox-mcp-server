@@ -1,17 +1,20 @@
 # Coder Toolbox MCP Server
 
-A utility toolkit designed to enhance the interaction between Claude and code, providing seamless integration tools for code analysis, manipulation, and testing workflows.
+A utility toolkit designed to enhance the interaction between Claude and code, providing seamless integration tools for
+code analysis, manipulation, and testing workflows.
 
 ## Features
 
 ### Implemented
 
 #### Test Execution Logs
+
 - Retrieve and analyze test execution logs
 - Access detailed test results and output
 - Parse and format test execution data
 
 ### Coming Soon
+
 - Smart method replacement in existing files
 - Project-wide class-based code navigation
 - Framework-agnostic code file generation
@@ -23,21 +26,10 @@ A utility toolkit designed to enhance the interaction between Claude and code, p
 # Installation instructions to be added
 ```
 
-## Usage
+## Tools
 
-### Getting Test Logs
-
-```json
-{
-    name: "get_test_logs",
-    description: "Get all test execution logs",
-    inputSchema: {
-        type: "object",
-        properties: {},
-        required: []
-    }
-}
-```
+- get_test_logs
+    - Retrieve test execution logs
 
 ## Development Roadmap
 
