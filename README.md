@@ -27,11 +27,16 @@ A utility toolkit designed to enhance the interaction between Claude and code, p
 
 ### Getting Test Logs
 
-```python
-from coder_toolbox_mcp_server import get_test_logs
-
-# Retrieve test execution logs
-logs = get_test_logs()
+```json
+{
+    name: "get_test_logs",
+    description: "Get all test execution logs",
+    inputSchema: {
+        type: "object",
+        properties: {},
+        required: []
+    }
+}
 ```
 
 ## Development Roadmap
