@@ -163,7 +163,7 @@ class TestingServer {
                 }
             }, {
                 name: "locate_java_class",
-                description: "Locate a java class file in the project source code by its name, with optional package path and type filtering",
+                description: "Locate and return a java class file in the project source code by its name, with optional package path and type filtering",
                 inputSchema: zodToJsonSchema(ClassLocationSchema) as ToolInput
             }, {
                 name: "class_add_method",
