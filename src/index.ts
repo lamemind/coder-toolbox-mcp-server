@@ -51,23 +51,31 @@ await Promise.all([logDirectory].map(async (dir) => {
 }));
 
 // Schema definitions
-const LocateClassArgsSchema = z.object({
+const ClassLocationSchema = z.object({
     className: z.string().min(1)
         .describe('The name of the class to find (case sensitive)'),
-
     packagePath: z.string()
         .regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/)
         .optional()
         .describe('Optional package path to restrict the search (e.g. \'com.myself.myproject.something\')'),
-
     isTestClass: z.boolean()
         .default(false)
         .describe('Whether to search for a test class (true) or source class (false)')
 });
 
+const AddMethodSchema = ClassLocationSchema.extend({
+    methodBody: z.string().min(1)
+        .describe('Full method declaration including modifiers, return type, name, parameters and body')
+});
+
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
+interface FileSearchResult {
+    found: boolean;
+    filepath?: string;
+    content?: string;
+}
 
 class TestingServer {
     private server: Server;
@@ -90,8 +98,55 @@ class TestingServer {
         this.setupHandlers();
     }
 
+    private async searchJavaFile(searchPath: string, className: string): Promise<FileSearchResult> {
+        async function searchInDirectory(dirPath: string): Promise<FileSearchResult> {
+            try {
+                const entries = await fs.readdir(dirPath, {withFileTypes: true});
+
+                for (const entry of entries) {
+                    const fullPath = path.join(dirPath, entry.name);
+
+                    if (entry.isDirectory()) {
+                        const result = await searchInDirectory(fullPath);
+                        if (result.found) return result;
+                    } else if (entry.isFile()) {
+                        const expectedFileName = `${className}.java`;
+                        if (entry.name === expectedFileName) {
+                            const content = await fs.readFile(fullPath, 'utf-8');
+                            const relativePath = path.relative(projectPath, fullPath);
+                            return {
+                                found: true,
+                                filepath: relativePath.replace(/\\/g, '/'),
+                                content
+                            };
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`Error searching directory ${dirPath}:`, error);
+            }
+            return {found: false};
+        }
+
+        return await searchInDirectory(searchPath);
+    }
+
+    private getJavaRootPath(isTestClass: boolean, packagePath?: string): string {
+        let searchPath = path.join(
+            this.projectPath,
+            'src',
+            isTestClass ? 'test' : 'main',
+            'java'
+        );
+
+        if (packagePath) {
+            searchPath = path.join(searchPath, ...packagePath.split('.'));
+        }
+
+        return searchPath;
+    }
+
     private setupHandlers(): void {
-        // Solo uno strumento per leggere i log
         this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
             tools: [{
                 name: "get_test_logs",
@@ -104,83 +159,34 @@ class TestingServer {
             }, {
                 name: "locate_class",
                 description: "Locate a class file in the project source code by its name, with optional package path and type filtering",
-                inputSchema: zodToJsonSchema(LocateClassArgsSchema) as ToolInput
+                inputSchema: zodToJsonSchema(ClassLocationSchema) as ToolInput
+            }, {
+                name: "add_method",
+                description: "Add a new method to an existing Java class",
+                inputSchema: zodToJsonSchema(AddMethodSchema) as ToolInput
             }]
         }));
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (request.params.name === "locate_class") {
-                const parsed = LocateClassArgsSchema.safeParse(request.params.arguments);
+                const parsed = ClassLocationSchema.safeParse(request.params.arguments);
                 if (!parsed.success)
                     throw new Error(`Invalid arguments for locate_class: ${parsed.error}`);
 
-                const className = parsed.data.className;
-                const isTestClass = parsed.data.isTestClass;
-                const self = this;
-
-                async function searchInDirectory(dirPath: string): Promise<{
-                    found: boolean;
-                    filepath?: string;
-                    content?: string
-                }> {
-                    try {
-                        const entries = await fs.readdir(dirPath, {withFileTypes: true});
-
-                        for (const entry of entries) {
-                            const fullPath = path.join(dirPath, entry.name);
-
-                            if (entry.isDirectory()) {
-                                const result = await searchInDirectory(fullPath);
-                                if (result.found) return result;
-
-                            } else if (entry.isFile()) {
-                                // Match .java files with exact class name
-                                const expectedFileName = `${className}.java`;
-                                if (entry.name === expectedFileName) {
-                                    // Check if it's a test file based on path or naming
-                                    const content = await fs.readFile(fullPath, 'utf-8');
-                                    const relativePath = path.relative(self.projectPath, fullPath);
-                                    return {
-                                        found: true,
-                                        filepath: relativePath.replace(/\\/g, '/'),
-                                        content
-                                    };
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.error(`Error searching directory ${dirPath}:`, error);
-                    }
-
-                    return {found: false};
-                }
-
                 try {
-                    let searchPath = this.projectPath;
-                    if (isTestClass)
-                        searchPath += '/src/test/java';
-                    else
-                        searchPath += '/src/main/java';
-
-                    if (parsed.data.packagePath) {
-                        // Convert package path to directory path
-                        const packageDir = parsed.data.packagePath.replace(/\./g, '/');
-                        searchPath += `/${packageDir}`;
-
-                        // Verify the package directory exists
-                        try {
-                            await fs.access(searchPath);
-                        } catch {
-                            return {
-                                content: [{
-                                    type: "text",
-                                    text: JSON.stringify({found: false})
-                                }]
-                            };
-                        }
+                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    try {
+                        await fs.access(searchPath);
+                    } catch {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({found: false})
+                            }]
+                        };
                     }
 
-                    const result = await searchInDirectory(searchPath);
+                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
                     return {
                         content: [{
                             type: "text",
@@ -191,6 +197,65 @@ class TestingServer {
                     throw new McpError(
                         ErrorCode.InternalError,
                         `Failed to search for class: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                }
+            }
+
+            if (request.params.name === "add_method") {
+                const parsed = AddMethodSchema.safeParse(request.params.arguments);
+                if (!parsed.success)
+                    throw new Error(`Invalid arguments for add_method: ${parsed.error}`);
+
+                try {
+                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
+
+                    if (!result.found || !result.filepath || !result.content) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Class file not found"
+                                })
+                            }]
+                        };
+                    }
+
+                    const fileContent = result.content;
+                    const lastBraceIndex = fileContent.lastIndexOf('}');
+                    if (lastBraceIndex === -1) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Invalid class file format - missing closing brace"
+                                })
+                            }]
+                        };
+                    }
+
+                    const newContent = fileContent.slice(0, lastBraceIndex) +
+                        "\n\n" + parsed.data.methodBody + "\n" +
+                        fileContent.slice(lastBraceIndex);
+
+                    const fullPath = path.join(this.projectPath, result.filepath);
+                    await fs.writeFile(fullPath, newContent, 'utf-8');
+
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                success: true,
+                                filepath: result.filepath
+                            })
+                        }]
+                    };
+                } catch (error) {
+                    throw new McpError(
+                        ErrorCode.InternalError,
+                        `Failed to add method: ${error instanceof Error ? error.message : String(error)}`
                     );
                 }
             }
@@ -242,7 +307,6 @@ class TestingServer {
         console.error("Test logs MCP server running on stdio");
     }
 }
-
 
 const server = new TestingServer();
 server.run().catch(console.error);
