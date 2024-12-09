@@ -223,8 +223,8 @@ class TestingServer {
                     }
 
                     const fileContent = result.content;
-                    const lastBraceIndex = fileContent.lastIndexOf('}');
-                    if (lastBraceIndex === -1) {
+                    const classEndMatch = fileContent.match(/^}/m);
+                    if (!classEndMatch || !classEndMatch.index) {
                         return {
                             content: [{
                                 type: "text",
@@ -236,9 +236,10 @@ class TestingServer {
                         };
                     }
 
-                    const newContent = fileContent.slice(0, lastBraceIndex) +
+                    const insertPosition = classEndMatch.index;
+                    const newContent = fileContent.slice(0, insertPosition) +
                         "\n\n" + parsed.data.methodBody + "\n" +
-                        fileContent.slice(lastBraceIndex);
+                        fileContent.slice(insertPosition);
 
                     const fullPath = path.join(this.projectPath, result.filepath);
                     await fs.writeFile(fullPath, newContent, 'utf-8');
