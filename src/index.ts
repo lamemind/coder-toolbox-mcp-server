@@ -154,8 +154,8 @@ class TestingServer {
     private setupHandlers(): void {
         this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
             tools: [{
-                name: "get_test_logs",
-                description: "Get all test execution logs",
+                name: "get_test_execution_logs",
+                description: "Retrieve the test execution logs. Test are meant to run continuously and log their output to a file.",
                 inputSchema: {
                     type: "object",
                     properties: {},
