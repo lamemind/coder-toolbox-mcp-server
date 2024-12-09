@@ -63,6 +63,18 @@ const ClassLocationSchema = z.object({
         .describe('Whether to search for a test class (true) or source class (false)')
 });
 
+const ClassCreateSchema = z.object({
+    className: z.string().min(1)
+        .describe('The name of the class to create (case sensitive)'),
+    packagePath: z.string()
+        .regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/)
+        .optional()
+        .describe('The package path where to create the java class file (e.g. \'com.myself.myproject.something\')'),
+    isTestClass: z.boolean()
+        .default(false)
+        .describe('Whether to to write a test class (true) or source class (false)')
+});
+
 const AddMethodSchema = ClassLocationSchema.extend({
     methodBody: z.string().min(1)
         .describe('Full method declaration including modifiers, return type, name, parameters and body')
@@ -165,6 +177,10 @@ class TestingServer {
                 name: "locate_java_class",
                 description: "Locate and return a java class file in the project source code by its name, with optional package path and type filtering",
                 inputSchema: zodToJsonSchema(ClassLocationSchema) as ToolInput
+            }, {
+                name: "create_java_class",
+                description: "Create a new Java class file in the project source code with optional package path and type specification (source or test)",
+                inputSchema: zodToJsonSchema(ClassCreateSchema) as ToolInput
             }, {
                 name: "class_add_method",
                 description: "Add a new method to an existing Java class",
@@ -311,7 +327,7 @@ class TestingServer {
 
                     // Find all imports before class declaration
                     const importLines = lines.slice(0, classLineIndex)
-                        .map((line, index) => ({ line, index }))
+                        .map((line, index) => ({line, index}))
                         .filter(({line}) => line.trim().startsWith('import '));
 
                     // Insert after last import or at second line if no imports
