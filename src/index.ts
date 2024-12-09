@@ -68,6 +68,11 @@ const AddMethodSchema = ClassLocationSchema.extend({
         .describe('Full method declaration including modifiers, return type, name, parameters and body')
 });
 
+const AddImportSchema = ClassLocationSchema.extend({
+    importStatement: z.string().min(1)
+        .describe('Full import statement (e.g. "import java.util.List;")')
+});
+
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
@@ -164,6 +169,10 @@ class TestingServer {
                 name: "add_method",
                 description: "Add a new method to an existing Java class",
                 inputSchema: zodToJsonSchema(AddMethodSchema) as ToolInput
+            }, {
+                name: "add_import",
+                description: "Add new import statement to an existing Java class",
+                inputSchema: zodToJsonSchema(AddImportSchema) as ToolInput
             }]
         }));
 
@@ -257,6 +266,78 @@ class TestingServer {
                     throw new McpError(
                         ErrorCode.InternalError,
                         `Failed to add method: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                }
+            }
+
+            if (request.params.name === "add_import") {
+                const parsed = AddImportSchema.safeParse(request.params.arguments);
+                if (!parsed.success)
+                    throw new Error(`Invalid arguments for add_import: ${parsed.error}`);
+
+                try {
+                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
+
+                    if (!result.found || !result.filepath || !result.content) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Class file not found"
+                                })
+                            }]
+                        };
+                    }
+
+                    const fileContent = result.content;
+                    const lines = fileContent.split('\n');
+
+                    // Find class declaration
+                    const classRegex = new RegExp(`^[a-z ]*?class ${parsed.data.className}`);
+                    const classLineIndex = lines.findIndex(line => classRegex.test(line));
+                    if (classLineIndex === -1) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Class declaration not found"
+                                })
+                            }]
+                        };
+                    }
+
+                    // Find all imports before class declaration
+                    const importLines = lines.slice(0, classLineIndex)
+                        .map((line, index) => ({ line, index }))
+                        .filter(({line}) => line.trim().startsWith('import '));
+
+                    // Insert after last import or at second line if no imports
+                    const insertIndex = importLines.length > 0
+                        ? importLines[importLines.length - 1].index + 1
+                        : 1;
+
+                    lines.splice(insertIndex, 0, parsed.data.importStatement);
+                    const newContent = lines.join('\n');
+
+                    const fullPath = path.join(this.projectPath, result.filepath);
+                    await fs.writeFile(fullPath, newContent, 'utf-8');
+
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                success: true,
+                                filepath: result.filepath
+                            })
+                        }]
+                    };
+                } catch (error) {
+                    throw new McpError(
+                        ErrorCode.InternalError,
+                        `Failed to add import: ${error instanceof Error ? error.message : String(error)}`
                     );
                 }
             }
