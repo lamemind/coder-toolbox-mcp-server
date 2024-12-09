@@ -18,10 +18,10 @@ code analysis, manipulation, and testing workflows.
 - Optional package path filtering
 - Returns file location and content
 
-### Coming Soon
-- Smart method replacement in existing files
-- Framework-agnostic code file generation
-- And more...
+#### Method Addition
+- Add new methods to existing Java classes
+- Preserves file structure and formatting
+- Automatic class file updating
 
 ## Tools
 
@@ -38,11 +38,20 @@ code analysis, manipulation, and testing workflows.
   - `filepath` (string, optional): Relative path to the found file
   - `content` (string, optional): Content of the found file
 
+### add_method
+- Parameters:
+  - All parameters from locate_class, plus:
+  - `methodBody` (string): Full method declaration including modifiers, return type, name, parameters and body
+- Returns: JSON object containing:
+  - `success` (boolean): Whether the method was added
+  - `filepath` (string, optional): Path of the modified file
+  - `error` (string, optional): Error message if operation failed
+
 ## Development Roadmap
 
 - [x] Test execution log retrieval
-- [ ] Method-level file modification
-- [X] Class-based code navigation
+- [x] Class-based code navigation
+- [x] Method-level file modification
 - [ ] Agnostic code file generation
 
 ## Contributing
