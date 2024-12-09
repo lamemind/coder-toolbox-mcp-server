@@ -15,9 +15,9 @@ A utility toolkit designed to enhance the interaction between Claude and code, p
 ### get_test_logs
 Retrieve test execution logs
 
-### locate_class
+### locate_java_class
 - Parameters:
-  - `className` (string): Name of the class to find (case sensitive)
+  - `className` (string): Name of the java class to find (case sensitive)
   - `packagePath` (string, optional): Package path to restrict search (e.g. 'com.myself.myproject')
   - `isTestClass` (boolean, default false): Whether to search in test or main source directory
 - Returns:
@@ -25,18 +25,18 @@ Retrieve test execution logs
   - `filepath` (string, optional): Relative path to the found file
   - `content` (string, optional): Content of the found file
 
-### add_method
+### class_add_method
 - Parameters:
-  - All parameters from locate_class, plus:
+  - All parameters from locate_java_class, plus:
   - `methodBody` (string): Full method declaration including modifiers, return type, name, parameters and body
 - Returns:
   - `success` (boolean): Whether the method was added
   - `filepath` (string, optional): Path of the modified file
   - `error` (string, optional): Error message if operation failed
 
-### add_import
+### class_add_import
 - Parameters:
-  - All parameters from locate_class, plus:
+  - All parameters from locate_java_class, plus:
   - `importStatement` (string): Full import statement (e.g. "import java.util.List;")
 - Returns:
   - `success` (boolean): Whether the import was added

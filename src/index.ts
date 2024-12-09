@@ -162,25 +162,25 @@ class TestingServer {
                     required: []
                 }
             }, {
-                name: "locate_class",
-                description: "Locate a class file in the project source code by its name, with optional package path and type filtering",
+                name: "locate_java_class",
+                description: "Locate a java class file in the project source code by its name, with optional package path and type filtering",
                 inputSchema: zodToJsonSchema(ClassLocationSchema) as ToolInput
             }, {
-                name: "add_method",
+                name: "class_add_method",
                 description: "Add a new method to an existing Java class",
                 inputSchema: zodToJsonSchema(AddMethodSchema) as ToolInput
             }, {
-                name: "add_import",
+                name: "class_add_import",
                 description: "Add new import statement to an existing Java class",
                 inputSchema: zodToJsonSchema(AddImportSchema) as ToolInput
             }]
         }));
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-            if (request.params.name === "locate_class") {
+            if (request.params.name === "locate_java_class") {
                 const parsed = ClassLocationSchema.safeParse(request.params.arguments);
                 if (!parsed.success)
-                    throw new Error(`Invalid arguments for locate_class: ${parsed.error}`);
+                    throw new Error(`Invalid arguments for locate_java_class: ${parsed.error}`);
 
                 try {
                     const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
@@ -210,10 +210,10 @@ class TestingServer {
                 }
             }
 
-            if (request.params.name === "add_method") {
+            if (request.params.name === "class_add_method") {
                 const parsed = AddMethodSchema.safeParse(request.params.arguments);
                 if (!parsed.success)
-                    throw new Error(`Invalid arguments for add_method: ${parsed.error}`);
+                    throw new Error(`Invalid arguments for class_add_method: ${parsed.error}`);
 
                 try {
                     const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
@@ -270,10 +270,10 @@ class TestingServer {
                 }
             }
 
-            if (request.params.name === "add_import") {
+            if (request.params.name === "class_add_import") {
                 const parsed = AddImportSchema.safeParse(request.params.arguments);
                 if (!parsed.success)
-                    throw new Error(`Invalid arguments for add_import: ${parsed.error}`);
+                    throw new Error(`Invalid arguments for class_add_import: ${parsed.error}`);
 
                 try {
                     const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
