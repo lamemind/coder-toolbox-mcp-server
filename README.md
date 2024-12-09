@@ -29,7 +29,7 @@ code analysis, manipulation, and testing workflows.
 
 - [x] Test execution log retrieval
 - [ ] Method-level file modification
-- [ ] Class-based code navigation
+- [X] Class-based code navigation
 - [ ] Agnostic code file generation
 
 ## Contributing
