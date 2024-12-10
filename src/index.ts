@@ -81,8 +81,8 @@ const AddMethodSchema = ClassLocationSchema.extend({
 });
 
 const AddImportSchema = ClassLocationSchema.extend({
-    importStatement: z.string().min(1)
-        .describe('Full import statement (e.g. "import java.util.List;")')
+    importStatements: z.string().min(1)
+        .describe('Full import statements, one or more row of import (e.g. "import java.util.List;")')
 });
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
@@ -186,8 +186,8 @@ class TestingServer {
                 description: "Add a new method to an existing Java class",
                 inputSchema: zodToJsonSchema(AddMethodSchema) as ToolInput
             }, {
-                name: "class_add_import",
-                description: "Add new import statement to an existing Java class",
+                name: "class_add_imports",
+                description: "Add new import statements to an existing Java class",
                 inputSchema: zodToJsonSchema(AddImportSchema) as ToolInput
             }]
         }));
@@ -342,7 +342,7 @@ class TestingServer {
                 }
             }
 
-            if (request.params.name === "class_add_import") {
+            if (request.params.name === "class_add_imports") {
                 const parsed = AddImportSchema.safeParse(request.params.arguments);
                 if (!parsed.success)
                     throw new Error(`Invalid arguments for class_add_import: ${parsed.error}`);
@@ -391,7 +391,7 @@ class TestingServer {
                         ? importLines[importLines.length - 1].index + 1
                         : 1;
 
-                    lines.splice(insertIndex, 0, parsed.data.importStatement);
+                    lines.splice(insertIndex, 0, parsed.data.importStatements);
                     const newContent = lines.join('\n');
 
                     const fullPath = path.join(this.projectPath, result.filepath);

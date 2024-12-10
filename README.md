@@ -46,12 +46,12 @@ Retrieve test execution logs
   - `filepath` (string, optional): Path of the modified file
   - `error` (string, optional): Error message if operation failed
 
-### class_add_import
+### class_add_imports
 - Parameters:
   - All parameters from locate_java_class, plus:
-  - `importStatement` (string): Full import statement (e.g. "import java.util.List;")
+  - `importStatements` (string): Full import statements, one or more row of import (e.g. "import java.util.List;")
 - Returns:
-  - `success` (boolean): Whether the import was added
+  - `success` (boolean): Whether the imports were added
   - `filepath` (string, optional): Path of the modified file
   - `error` (string, optional): Error message if operation failed
 
