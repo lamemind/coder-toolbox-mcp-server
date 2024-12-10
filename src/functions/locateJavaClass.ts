@@ -1,8 +1,8 @@
-import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
-import { ToolSchema, ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
+import {z} from "zod";
+import {zodToJsonSchema} from "zod-to-json-schema";
+import {ErrorCode, McpError, ToolSchema} from "@modelcontextprotocol/sdk/types.js";
 import fs from 'fs/promises';
-import { searchInDirectory, getJavaRootPath } from "../utils/javaFileSearch.js";
+import {getJavaRootPath, searchInDirectory} from "../utils/javaFileSearch.js";
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
@@ -34,12 +34,8 @@ export async function handleLocateJavaClass(
     args: unknown
 ) {
     const parsed = ClassLocationSchema.safeParse(args);
-    if (!parsed.success) {
-        throw new McpError(
-            ErrorCode.InvalidRequest,
-            `Invalid arguments for locate_java_class: ${parsed.error}`
-        );
-    }
+    if (!parsed.success)
+        throw new McpError(ErrorCode.InvalidRequest, `Invalid arguments for locate_java_class: ${parsed.error}`);
 
     try {
         const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
@@ -49,7 +45,7 @@ export async function handleLocateJavaClass(
             return {
                 content: [{
                     type: "text",
-                    text: JSON.stringify({ found: false, searchPath })
+                    text: JSON.stringify({found: false, searchPath})
                 }]
             };
         }

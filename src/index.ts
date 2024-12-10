@@ -15,6 +15,7 @@ import {applyFileEdits} from "./utils/fileEdits.js";
 import {expandHome, normalizePath} from "./utils/paths.js";
 import {ClassLocationSchema, handleLocateJavaClass, locateJavaClassTool} from "./functions/locateJavaClass.js";
 import {getJavaRootPath, searchInDirectory} from "./utils/javaFileSearch.js";
+import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -42,18 +43,6 @@ await Promise.all([logDirectory].map(async (dir) => {
 }));
 
 // Schema definitions
-
-const ClassCreateSchema = z.object({
-    className: z.string().min(1)
-        .describe('The name of the class to create (case sensitive)'),
-    sourceType: z.string()
-        .regex(/^(source|test)$/)
-        .describe('The source type where to create the java class file (\'source\' or \'test\')'),
-    packagePath: z.string()
-        .regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/)
-        .describe('The package path where to create the java class file (e.g. \'com.myself.myproject.something\')')
-});
-
 const AddClassBodySchema = ClassLocationSchema.extend({
     classBody: z.string().min(1)
         .describe('The class body to add, including fields, methods, constructors, etc.')
@@ -113,11 +102,7 @@ class TestingServer {
                     properties: {},
                     required: []
                 }
-            }, locateJavaClassTool, {
-                name: "create_java_class",
-                description: "Create a new Java class file in the project source or test code with package path and source/test specification",
-                inputSchema: zodToJsonSchema(ClassCreateSchema) as ToolInput
-            }, {
+            }, locateJavaClassTool, createJavaClassTool, {
                 name: "class_add_body",
                 description: "Add new content to an existing Java class body, including fields, methods, constructors, etc.",
                 inputSchema: zodToJsonSchema(AddClassBodySchema) as ToolInput
@@ -132,61 +117,8 @@ class TestingServer {
             if (request.params.name === "locate_java_class")
                 return handleLocateJavaClass(projectPath, request.params.arguments);
 
-            if (request.params.name === "create_java_class") {
-                const parsed = ClassCreateSchema.safeParse(request.params.arguments);
-                if (!parsed.success)
-                    throw new Error(`Invalid arguments for create_java_class: ${parsed.error}`);
-
-                try {
-                    const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
-
-                    // Ensure directory exists
-                    await fs.mkdir(searchPath, {recursive: true});
-
-                    const filePath = path.join(searchPath, `${parsed.data.className}.java`);
-
-                    // Check if file already exists
-                    try {
-                        await fs.access(filePath);
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Class file already exists"
-                                })
-                            }]
-                        };
-                    } catch {
-                        // File doesn't exist, we can proceed
-                    }
-
-                    // Create class content
-                    let content = '';
-                    if (parsed.data.packagePath) {
-                        content += `package ${parsed.data.packagePath};\n\n`;
-                    }
-                    content += `public class ${parsed.data.className} {\n}\n}`;
-
-                    // Write the file
-                    await fs.writeFile(filePath, content, 'utf-8');
-
-                    return {
-                        content: [{
-                            type: "text",
-                            text: JSON.stringify({
-                                success: true,
-                                filepath: path.relative(this.projectPath, filePath).replace(/\\/g, '/')
-                            })
-                        }]
-                    };
-                } catch (error) {
-                    throw new McpError(
-                        ErrorCode.InternalError,
-                        `Failed to create class: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            }
+            if (request.params.name === "create_java_class")
+                return createJavaClass(projectPath, request.params.arguments);
 
             if (request.params.name === "class_add_body") {
                 const parsed = AddClassBodySchema.safeParse(request.params.arguments);
