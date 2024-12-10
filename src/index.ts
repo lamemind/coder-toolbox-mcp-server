@@ -75,21 +75,6 @@ const ClassCreateSchema = z.object({
         .describe('The package path where to create the java class file (e.g. \'com.myself.myproject.something\')')
 });
 
-const AddMethodSchema = ClassLocationSchema.extend({
-    methodBody: z.string().min(1)
-        .describe('The method declaration including modifiers, return type, name, parameters and body. E.g. "public void myMethod() { System.out.println(\"Hello\"); }"')
-});
-
-const AddConstructorSchema = ClassLocationSchema.extend({
-    constructorBody: z.string().min(1)
-        .describe('The constructor declaration including modifiers, parameters and body. E.g. "public MyClass(String name) { this.name = name; }"')
-});
-
-const AddImportSchema = ClassLocationSchema.extend({
-    importStatements: z.string().min(1)
-        .describe('Full import statements, one or more row of import (e.g. "import java.util.List;")')
-});
-
 const AddClassBodySchema = ClassLocationSchema.extend({
     classBody: z.string().min(1)
         .describe('The class body to add, including fields, methods, constructors, etc.')
@@ -192,21 +177,9 @@ class TestingServer {
                 description: "Create a new Java class file in the project source or test code with package path and source/test specification",
                 inputSchema: zodToJsonSchema(ClassCreateSchema) as ToolInput
             }, {
-                name: "class_add_method",
-                description: "Add a new method to an existing Java class",
-                inputSchema: zodToJsonSchema(AddMethodSchema) as ToolInput
-            }, {
-                name: "class_add_imports",
-                description: "Add new import statements to an existing Java class",
-                inputSchema: zodToJsonSchema(AddImportSchema) as ToolInput
-            }, {
                 name: "class_add_body",
                 description: "Add new content to an existing Java class body, including fields, methods, constructors, etc.",
                 inputSchema: zodToJsonSchema(AddClassBodySchema) as ToolInput
-            }, {
-                name: "class_add_constructor",
-                description: "Add a new constructor to an existing Java class",
-                inputSchema: zodToJsonSchema(AddConstructorSchema) as ToolInput
             }]
         }));
 
@@ -300,138 +273,6 @@ class TestingServer {
                 }
             }
 
-            if (request.params.name === "class_add_method") {
-                const parsed = AddMethodSchema.safeParse(request.params.arguments);
-                if (!parsed.success)
-                    throw new Error(`Invalid arguments for class_add_method: ${parsed.error}`);
-
-                try {
-                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
-                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
-
-                    if (!result.found || !result.filepath || !result.content) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Class file not found"
-                                })
-                            }]
-                        };
-                    }
-
-                    const fileContent = result.content;
-                    const classEndMatch = fileContent.match(/^}/m);
-                    if (!classEndMatch || !classEndMatch.index) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Invalid class file format - missing closing brace"
-                                })
-                            }]
-                        };
-                    }
-
-                    const insertPosition = classEndMatch.index;
-                    const newContent = fileContent.slice(0, insertPosition) +
-                        "\n\n" + parsed.data.methodBody + "\n" +
-                        fileContent.slice(insertPosition);
-
-                    const fullPath = path.join(this.projectPath, result.filepath);
-                    await fs.writeFile(fullPath, newContent, 'utf-8');
-
-                    return {
-                        content: [{
-                            type: "text",
-                            text: JSON.stringify({
-                                success: true,
-                                filepath: result.filepath
-                            })
-                        }]
-                    };
-                } catch (error) {
-                    throw new McpError(
-                        ErrorCode.InternalError,
-                        `Failed to add method: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            }
-
-            if (request.params.name === "class_add_imports") {
-                const parsed = AddImportSchema.safeParse(request.params.arguments);
-                if (!parsed.success)
-                    throw new Error(`Invalid arguments for class_add_import: ${parsed.error}`);
-
-                try {
-                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
-                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
-
-                    if (!result.found || !result.filepath || !result.content) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Class file not found"
-                                })
-                            }]
-                        };
-                    }
-
-                    const fileContent = result.content;
-                    const lines = fileContent.split('\n');
-
-                    // Find class declaration
-                    const classRegex = new RegExp(`^[a-z ]*?class ${parsed.data.className}`);
-                    const classLineIndex = lines.findIndex(line => classRegex.test(line));
-                    if (classLineIndex === -1) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Class declaration not found"
-                                })
-                            }]
-                        };
-                    }
-
-                    // Find all imports before class declaration
-                    const importLines = lines.slice(0, classLineIndex)
-                        .map((line, index) => ({line, index}))
-                        .filter(({line}) => line.trim().startsWith('import '));
-
-                    // Insert after last import or at second line if no imports
-                    const insertIndex = importLines.length > 0
-                        ? importLines[importLines.length - 1].index + 1
-                        : 1;
-
-                    lines.splice(insertIndex, 0, parsed.data.importStatements);
-                    const newContent = lines.join('\n');
-
-                    const fullPath = path.join(this.projectPath, result.filepath);
-                    await fs.writeFile(fullPath, newContent, 'utf-8');
-
-                    return {
-                        content: [{
-                            type: "text",
-                            text: JSON.stringify({
-                                success: true,
-                                filepath: result.filepath
-                            })
-                        }]
-                    };
-                } catch (error) {
-                    throw new McpError(
-                        ErrorCode.InternalError,
-                        `Failed to add import: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            }
-
             if (request.params.name === "class_add_body") {
                 const parsed = AddClassBodySchema.safeParse(request.params.arguments);
                 if (!parsed.success)
@@ -488,85 +329,6 @@ class TestingServer {
                     throw new McpError(
                         ErrorCode.InternalError,
                         `Failed to add class body: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            }
-            
-            if (request.params.name === "class_add_constructor") {
-                const parsed = AddConstructorSchema.safeParse(request.params.arguments);
-                if (!parsed.success)
-                    throw new Error(`Invalid arguments for class_add_constructor: ${parsed.error}`);
-
-                try {
-                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
-                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
-
-                    if (!result.found || !result.filepath || !result.content) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Class file not found"
-                                })
-                            }]
-                        };
-                    }
-
-                    const fileContent = result.content;
-                    const lines = fileContent.split('\n');
-
-                    // Find class declaration
-                    const classRegex = new RegExp(`^[a-z ]*?class ${parsed.data.className}`);
-                    const classLineIndex = lines.findIndex(line => classRegex.test(line));
-                    if (classLineIndex === -1) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Class declaration not found"
-                                })
-                            }]
-                        };
-                    }
-
-                    // Find opening brace of class
-                    const openBraceIndex = lines.findIndex((line, index) =>
-                        index >= classLineIndex && line.includes('{'));
-
-                    if (openBraceIndex === -1) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Class opening brace not found"
-                                })
-                            }]
-                        };
-                    }
-
-                    // Insert constructor after class opening brace
-                    lines.splice(openBraceIndex + 1, 0, '\n    ' + parsed.data.constructorBody + '\n');
-                    const newContent = lines.join('\n');
-
-                    const fullPath = path.join(this.projectPath, result.filepath);
-                    await fs.writeFile(fullPath, newContent, 'utf-8');
-
-                    return {
-                        content: [{
-                            type: "text",
-                            text: JSON.stringify({
-                                success: true,
-                                filepath: result.filepath
-                            })
-                        }]
-                    };
-                } catch (error) {
-                    throw new McpError(
-                        ErrorCode.InternalError,
-                        `Failed to add constructor: ${error instanceof Error ? error.message : String(error)}`
                     );
                 }
             }
