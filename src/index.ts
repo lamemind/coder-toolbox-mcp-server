@@ -90,6 +90,11 @@ const AddImportSchema = ClassLocationSchema.extend({
         .describe('Full import statements, one or more row of import (e.g. "import java.util.List;")')
 });
 
+const AddClassBodySchema = ClassLocationSchema.extend({
+    classBody: z.string().min(1)
+        .describe('The class body to add, including fields, methods, constructors, etc.')
+});
+
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
@@ -153,13 +158,13 @@ class TestingServer {
         return await searchInDirectory(searchPath);
     }
 
-    private getJavaRootPath(isTestClass: boolean, packagePath?: string): string {
-        let searchPath = path.join(
-            this.projectPath,
-            'src',
-            isTestClass ? 'test' : 'main',
-            'java'
-        );
+    private getJavaRootPath(sourceType: string | undefined, packagePath?: string): string {
+        let searchPath = path.join(this.projectPath, 'src');
+        if (sourceType === 'test')
+            searchPath = path.join(searchPath, 'test');
+        else if (sourceType === 'source')
+            searchPath = path.join(this.projectPath, 'main');
+        searchPath = path.join(searchPath, 'java');
 
         if (packagePath) {
             searchPath = path.join(searchPath, ...packagePath.split('.'));
@@ -195,6 +200,10 @@ class TestingServer {
                 description: "Add new import statements to an existing Java class",
                 inputSchema: zodToJsonSchema(AddImportSchema) as ToolInput
             }, {
+                name: "class_add_body",
+                description: "Add new content to an existing Java class body, including fields, methods, constructors, etc.",
+                inputSchema: zodToJsonSchema(AddClassBodySchema) as ToolInput
+            }, {
                 name: "class_add_constructor",
                 description: "Add a new constructor to an existing Java class",
                 inputSchema: zodToJsonSchema(AddConstructorSchema) as ToolInput
@@ -208,7 +217,7 @@ class TestingServer {
                     throw new Error(`Invalid arguments for locate_java_class: ${parsed.error}`);
 
                 try {
-                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
                     try {
                         await fs.access(searchPath);
                     } catch {
@@ -241,10 +250,10 @@ class TestingServer {
                     throw new Error(`Invalid arguments for create_java_class: ${parsed.error}`);
 
                 try {
-                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
 
                     // Ensure directory exists
-                    await fs.mkdir(searchPath, { recursive: true });
+                    await fs.mkdir(searchPath, {recursive: true});
 
                     const filePath = path.join(searchPath, `${parsed.data.className}.java`);
 
@@ -297,7 +306,7 @@ class TestingServer {
                     throw new Error(`Invalid arguments for class_add_method: ${parsed.error}`);
 
                 try {
-                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
                     const result = await this.searchJavaFile(searchPath, parsed.data.className);
 
                     if (!result.found || !result.filepath || !result.content) {
@@ -357,7 +366,7 @@ class TestingServer {
                     throw new Error(`Invalid arguments for class_add_import: ${parsed.error}`);
 
                 try {
-                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
                     const result = await this.searchJavaFile(searchPath, parsed.data.className);
 
                     if (!result.found || !result.filepath || !result.content) {
@@ -423,13 +432,73 @@ class TestingServer {
                 }
             }
 
+            if (request.params.name === "class_add_body") {
+                const parsed = AddClassBodySchema.safeParse(request.params.arguments);
+                if (!parsed.success)
+                    throw new Error(`Invalid arguments for class_add_body: ${parsed.error}`);
+
+                try {
+                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
+                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
+
+                    if (!result.found || !result.filepath || !result.content) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Class file not found"
+                                })
+                            }]
+                        };
+                    }
+
+                    const fileContent = result.content;
+                    const classEndMatch = fileContent.match(/^}/m);
+                    if (!classEndMatch || !classEndMatch.index) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Invalid class file format - missing closing brace"
+                                })
+                            }]
+                        };
+                    }
+
+                    const insertPosition = classEndMatch.index;
+                    const newContent = fileContent.slice(0, insertPosition) +
+                        "\n\n" + parsed.data.classBody + "\n" +
+                        fileContent.slice(insertPosition);
+
+                    const fullPath = path.join(this.projectPath, result.filepath);
+                    await fs.writeFile(fullPath, newContent, 'utf-8');
+
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                success: true,
+                                filepath: result.filepath
+                            })
+                        }]
+                    };
+                } catch (error) {
+                    throw new McpError(
+                        ErrorCode.InternalError,
+                        `Failed to add class body: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                }
+            }
+            
             if (request.params.name === "class_add_constructor") {
                 const parsed = AddConstructorSchema.safeParse(request.params.arguments);
                 if (!parsed.success)
                     throw new Error(`Invalid arguments for class_add_constructor: ${parsed.error}`);
 
                 try {
-                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
                     const result = await this.searchJavaFile(searchPath, parsed.data.className);
 
                     if (!result.found || !result.filepath || !result.content) {

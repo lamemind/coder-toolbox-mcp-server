@@ -65,6 +65,15 @@ Retrieve test execution logs
   - `filepath` (string, optional): Path of the modified file
   - `error` (string, optional): Error message if operation failed
 
+### class_add_body
+- Parameters:
+  - All parameters from locate_java_class, plus:
+  - `classBody` (string): The class body content to add, including fields, methods, constructors, etc.
+- Returns:
+  - `success` (boolean): Whether the content was added
+  - `filepath` (string, optional): Path of the modified file
+  - `error` (string, optional): Error message if operation failed
+
 ## Development Roadmap
 - [x] Test execution log retrieval
 - [x] Class-based code navigation
