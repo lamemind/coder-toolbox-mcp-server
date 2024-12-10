@@ -10,13 +10,12 @@ import {
 import fs from 'fs/promises';
 import path from 'path';
 import {z} from "zod";
-import {zodToJsonSchema} from "zod-to-json-schema";
-import {applyFileEdits} from "./utils/fileEdits.js";
 import {expandHome, normalizePath} from "./utils/paths.js";
 import {ClassLocationSchema, handleLocateJavaClass, locateJavaClassTool} from "./functions/locateJavaClass.js";
-import {getJavaRootPath, searchInDirectory} from "./utils/javaFileSearch.js";
+import {searchInDirectory} from "./utils/javaFileSearch.js";
 import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.js";
 import {addClassBody, classAddBodyTool} from "./functions/classAddBody.js";
+import {classReplaceBodyTool, replaceClassBody} from "./functions/classReplaceBody.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -66,10 +65,8 @@ interface FileSearchResult {
 class TestingServer {
     private server: Server;
     private readonly logPath: string;
-    private readonly projectPath: string;
 
     constructor() {
-        this.projectPath = projectPath;
         this.logPath = logDirectory;
 
         this.server = new Server({
@@ -98,11 +95,7 @@ class TestingServer {
                     properties: {},
                     required: []
                 }
-            }, locateJavaClassTool, createJavaClassTool, classAddBodyTool, {
-                name: "class_replace_body",
-                description: "Replace the a portion of the existing Java class body with new content",
-                inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput
-            }]
+            }, locateJavaClassTool, createJavaClassTool, classAddBodyTool, classReplaceBodyTool]
         }));
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -118,28 +111,9 @@ class TestingServer {
                 return addClassBody(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
-            if (request.params.name === "class_replace_body") {
-                const parsed = EditFileArgsSchema.safeParse(args);
-                if (!parsed.success)
-                    throw new Error(`Invalid arguments for class_replace_body: ${parsed.error}`);
-
-                try {
-                    const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
-                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
-                    if (!result.found || !result.filepath || !result.content)
-                        throw new Error(`Class file not found: ${parsed.data.className}`);
-
-                    const editResult = await applyFileEdits(result.filepath, parsed.data.edits, parsed.data.dryRun);
-                    return {
-                        content: [{type: "text", text: editResult}],
-                    };
-                } catch (error) {
-                    throw new McpError(
-                        ErrorCode.InternalError,
-                        `Failed to add class body: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            }
+            if (request.params.name === "class_replace_body")
+                return replaceClassBody(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: result}]}));
 
             if (request.params.name === "get_test_execution_logs") {
                 try {
