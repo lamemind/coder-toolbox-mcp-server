@@ -11,6 +11,7 @@ A utility toolkit designed to enhance the interaction between Claude and code, p
   - Creation: Create new Java classes with proper package structure
   - Method Addition: Add new methods to existing Java classes
   - Import Management: Add and organize import statements in Java classes
+  - Constructor Addition: Add new constructors to existing Java classes
 
 ## Tools
 
@@ -50,6 +51,15 @@ Retrieve test execution logs
 - Parameters:
   - All parameters from locate_java_class, plus:
   - `importStatements` (string): Full import statements, one or more row of import (e.g. "import java.util.List;")
+
+### class_add_constructor
+- Parameters:
+  - All parameters from locate_java_class, plus:
+  - `constructorBody` (string): The constructor declaration including modifiers, parameters and body (e.g. "public MyClass(String name) { this.name = name; }")
+- Returns:
+  - `success` (boolean): Whether the constructor was added
+  - `filepath` (string, optional): Path of the modified file
+  - `error` (string, optional): Error message if operation failed
 - Returns:
   - `success` (boolean): Whether the imports were added
   - `filepath` (string, optional): Path of the modified file
@@ -63,7 +73,7 @@ Retrieve test execution logs
 - [x] Import statement management
 - [ ] Add class field
 - [ ] Add class annotation
-- [ ] Add class constructor
+- [x] Add class constructor
 - [ ] Add class interface implementation
 - [ ] Add class inheritance
 

@@ -80,6 +80,11 @@ const AddMethodSchema = ClassLocationSchema.extend({
         .describe('The method declaration including modifiers, return type, name, parameters and body. E.g. "public void myMethod() { System.out.println(\"Hello\"); }"')
 });
 
+const AddConstructorSchema = ClassLocationSchema.extend({
+    constructorBody: z.string().min(1)
+        .describe('The constructor declaration including modifiers, parameters and body. E.g. "public MyClass(String name) { this.name = name; }"')
+});
+
 const AddImportSchema = ClassLocationSchema.extend({
     importStatements: z.string().min(1)
         .describe('Full import statements, one or more row of import (e.g. "import java.util.List;")')
@@ -189,6 +194,10 @@ class TestingServer {
                 name: "class_add_imports",
                 description: "Add new import statements to an existing Java class",
                 inputSchema: zodToJsonSchema(AddImportSchema) as ToolInput
+            }, {
+                name: "class_add_constructor",
+                description: "Add a new constructor to an existing Java class",
+                inputSchema: zodToJsonSchema(AddConstructorSchema) as ToolInput
             }]
         }));
 
@@ -410,6 +419,85 @@ class TestingServer {
                     throw new McpError(
                         ErrorCode.InternalError,
                         `Failed to add import: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                }
+            }
+
+            if (request.params.name === "class_add_constructor") {
+                const parsed = AddConstructorSchema.safeParse(request.params.arguments);
+                if (!parsed.success)
+                    throw new Error(`Invalid arguments for class_add_constructor: ${parsed.error}`);
+
+                try {
+                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
+
+                    if (!result.found || !result.filepath || !result.content) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Class file not found"
+                                })
+                            }]
+                        };
+                    }
+
+                    const fileContent = result.content;
+                    const lines = fileContent.split('\n');
+
+                    // Find class declaration
+                    const classRegex = new RegExp(`^[a-z ]*?class ${parsed.data.className}`);
+                    const classLineIndex = lines.findIndex(line => classRegex.test(line));
+                    if (classLineIndex === -1) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Class declaration not found"
+                                })
+                            }]
+                        };
+                    }
+
+                    // Find opening brace of class
+                    const openBraceIndex = lines.findIndex((line, index) => 
+                        index >= classLineIndex && line.includes('{'));
+                    
+                    if (openBraceIndex === -1) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Class opening brace not found"
+                                })
+                            }]
+                        };
+                    }
+
+                    // Insert constructor after class opening brace
+                    lines.splice(openBraceIndex + 1, 0, '\n    ' + parsed.data.constructorBody + '\n');
+                    const newContent = lines.join('\n');
+
+                    const fullPath = path.join(this.projectPath, result.filepath);
+                    await fs.writeFile(fullPath, newContent, 'utf-8');
+
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                success: true,
+                                filepath: result.filepath
+                            })
+                        }]
+                    };
+                } catch (error) {
+                    throw new McpError(
+                        ErrorCode.InternalError,
+                        `Failed to add constructor: ${error instanceof Error ? error.message : String(error)}`
                     );
                 }
             }
