@@ -226,6 +226,62 @@ class TestingServer {
                 }
             }
 
+            if (request.params.name === "create_java_class") {
+                const parsed = ClassCreateSchema.safeParse(request.params.arguments);
+                if (!parsed.success)
+                    throw new Error(`Invalid arguments for create_java_class: ${parsed.error}`);
+
+                try {
+                    const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
+                    
+                    // Ensure directory exists
+                    await fs.mkdir(searchPath, { recursive: true });
+                    
+                    const filePath = path.join(searchPath, `${parsed.data.className}.java`);
+                    
+                    // Check if file already exists
+                    try {
+                        await fs.access(filePath);
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    error: "Class file already exists"
+                                })
+                            }]
+                        };
+                    } catch {
+                        // File doesn't exist, we can proceed
+                    }
+
+                    // Create class content
+                    let content = '';
+                    if (parsed.data.packagePath) {
+                        content += `package ${parsed.data.packagePath};\n\n`;
+                    }
+                    content += `public class ${parsed.data.className} {\n}\n`;
+
+                    // Write the file
+                    await fs.writeFile(filePath, content, 'utf-8');
+
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                success: true,
+                                filepath: path.relative(this.projectPath, filePath).replace(/\\/g, '/')
+                            })
+                        }]
+                    };
+                } catch (error) {
+                    throw new McpError(
+                        ErrorCode.InternalError,
+                        `Failed to create class: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                }
+            }
+
             if (request.params.name === "class_add_method") {
                 const parsed = AddMethodSchema.safeParse(request.params.arguments);
                 if (!parsed.success)
