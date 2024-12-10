@@ -77,7 +77,7 @@ const ClassCreateSchema = z.object({
 
 const AddMethodSchema = ClassLocationSchema.extend({
     methodBody: z.string().min(1)
-        .describe('Full method declaration including modifiers, return type, name, parameters and body')
+        .describe('The method declaration including modifiers, return type, name, parameters and body. E.g. "public void myMethod() { System.out.println(\"Hello\"); }"')
 });
 
 const AddImportSchema = ClassLocationSchema.extend({
