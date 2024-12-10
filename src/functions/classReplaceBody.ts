@@ -4,6 +4,7 @@ import {ErrorCode, McpError, ToolSchema} from "@modelcontextprotocol/sdk/types.j
 import {ClassLocationSchema} from "./locateJavaClass.js";
 import {getJavaRootPath, searchInDirectory} from "../utils/javaFileSearch.js";
 import {applyFileEdits} from "../utils/fileEdits.js";
+import path from "path";
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
@@ -42,7 +43,8 @@ export async function replaceClassBody(
         if (!result.found || !result.filepath)
             throw new McpError(ErrorCode.InvalidRequest, `Class file not found: ${parsed.data.className}`);
 
-        return await applyFileEdits(result.filepath, parsed.data.edits, parsed.data.dryRun);
+        const fullPath = path.join(projectPath, result.filepath);
+        return await applyFileEdits(fullPath, parsed.data.edits, parsed.data.dryRun);
     } catch (error) {
         if (error instanceof McpError) throw error;
         throw new McpError(ErrorCode.InternalError, `Failed to replace class body: ${error instanceof Error ? error.message : String(error)}`);
