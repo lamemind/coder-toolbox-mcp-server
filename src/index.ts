@@ -12,6 +12,7 @@ import path from 'path';
 import * as os from "node:os";
 import {z} from "zod";
 import {zodToJsonSchema} from "zod-to-json-schema";
+import { diffLines, createTwoFilesPatch } from 'diff';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -80,6 +81,16 @@ const AddClassBodySchema = ClassLocationSchema.extend({
         .describe('The class body to add, including fields, methods, constructors, etc.')
 });
 
+const EditOperation = z.object({
+    oldText: z.string().describe('Text to search for - must match exactly'),
+    newText: z.string().describe('Text to replace with')
+});
+
+const EditFileArgsSchema = ClassLocationSchema.extend({
+    edits: z.array(EditOperation),
+    dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
+});
+
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
@@ -88,6 +99,104 @@ interface FileSearchResult {
     filepath?: string;
     content?: string;
 }
+
+function normalizeLineEndings(text: string): string {
+    return text.replace(/\r\n/g, '\n');
+}
+
+function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
+    // Ensure consistent line endings for diff
+    const normalizedOriginal = normalizeLineEndings(originalContent);
+    const normalizedNew = normalizeLineEndings(newContent);
+
+    return createTwoFilesPatch(
+        filepath,
+        filepath,
+        normalizedOriginal,
+        normalizedNew,
+        'original',
+        'modified'
+    );
+}
+
+async function applyFileEdits(
+    filePath: string,
+    edits: Array<{ oldText: string, newText: string }>,
+    dryRun = false
+): Promise<string> {
+    // Read file content and normalize line endings
+    const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
+
+    // Apply edits sequentially
+    let modifiedContent = content;
+    for (const edit of edits) {
+        const normalizedOld = normalizeLineEndings(edit.oldText);
+        const normalizedNew = normalizeLineEndings(edit.newText);
+
+        // If exact match exists, use it
+        if (modifiedContent.includes(normalizedOld)) {
+            modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
+            continue;
+        }
+
+        // Otherwise, try line-by-line matching with flexibility for whitespace
+        const oldLines = normalizedOld.split('\n');
+        const contentLines = modifiedContent.split('\n');
+        let matchFound = false;
+
+        for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
+            const potentialMatch = contentLines.slice(i, i + oldLines.length);
+
+            // Compare lines with normalized whitespace
+            const isMatch = oldLines.every((oldLine, j) => {
+                const contentLine = potentialMatch[j];
+                return oldLine.trim() === contentLine.trim();
+            });
+
+            if (isMatch) {
+                // Preserve original indentation of first line
+                const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
+                const newLines = normalizedNew.split('\n').map((line, j) => {
+                    if (j === 0) return originalIndent + line.trimStart();
+                    // For subsequent lines, try to preserve relative indentation
+                    const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
+                    const newIndent = line.match(/^\s*/)?.[0] || '';
+                    if (oldIndent && newIndent) {
+                        const relativeIndent = newIndent.length - oldIndent.length;
+                        return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
+                    }
+                    return line;
+                });
+
+                contentLines.splice(i, oldLines.length, ...newLines);
+                modifiedContent = contentLines.join('\n');
+                matchFound = true;
+                break;
+            }
+        }
+
+        if (!matchFound) {
+            throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
+        }
+    }
+
+    // Create unified diff
+    const diff = createUnifiedDiff(content, modifiedContent, filePath);
+
+    // Format diff with appropriate number of backticks
+    let numBackticks = 3;
+    while (diff.includes('`'.repeat(numBackticks))) {
+        numBackticks++;
+    }
+    const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
+
+    if (!dryRun) {
+        await fs.writeFile(filePath, modifiedContent, 'utf-8');
+    }
+
+    return formattedDiff;
+}
+
 
 class TestingServer {
     private server: Server;
@@ -180,6 +289,10 @@ class TestingServer {
                 name: "class_add_body",
                 description: "Add new content to an existing Java class body, including fields, methods, constructors, etc.",
                 inputSchema: zodToJsonSchema(AddClassBodySchema) as ToolInput
+            }, {
+                name: "class_replace_body",
+                description: "Replace the a portion of the existing Java class body with new content",
+                inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput
             }]
         }));
 
@@ -281,32 +394,13 @@ class TestingServer {
                 try {
                     const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
                     const result = await this.searchJavaFile(searchPath, parsed.data.className);
-
-                    if (!result.found || !result.filepath || !result.content) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Class file not found"
-                                })
-                            }]
-                        };
-                    }
+                    if (!result.found || !result.filepath || !result.content)
+                        throw new Error(`Class file not found: ${parsed.data.className}`);
 
                     const fileContent = result.content;
                     const classEndMatch = fileContent.match(/^}/m);
-                    if (!classEndMatch || !classEndMatch.index) {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    error: "Invalid class file format - missing closing brace"
-                                })
-                            }]
-                        };
-                    }
+                    if (!classEndMatch || !classEndMatch.index)
+                        throw new Error("Invalid class file format - missing closing brace");
 
                     const insertPosition = classEndMatch.index;
                     const newContent = fileContent.slice(0, insertPosition) +
@@ -318,12 +412,34 @@ class TestingServer {
 
                     return {
                         content: [{
-                            type: "text",
-                            text: JSON.stringify({
+                            type: "text", text: JSON.stringify({
                                 success: true,
                                 filepath: result.filepath
                             })
                         }]
+                    };
+                } catch (error) {
+                    throw new McpError(
+                        ErrorCode.InternalError,
+                        `Failed to add class body: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                }
+            }
+
+            if (request.params.name === "class_replace_body") {
+                const parsed = EditFileArgsSchema.safeParse(args);
+                if (!parsed.success)
+                    throw new Error(`Invalid arguments for class_replace_body: ${parsed.error}`);
+
+                try {
+                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
+                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
+                    if (!result.found || !result.filepath || !result.content)
+                        throw new Error(`Class file not found: ${parsed.data.className}`);
+
+                    const editResult = await applyFileEdits(result.filepath, parsed.data.edits, parsed.data.dryRun);
+                    return {
+                        content: [{type: "text", text: editResult}],
                     };
                 } catch (error) {
                     throw new McpError(
