@@ -54,25 +54,25 @@ await Promise.all([logDirectory].map(async (dir) => {
 const ClassLocationSchema = z.object({
     className: z.string().min(1)
         .describe('The name of the class to find (case sensitive)'),
+    sourceType: z.string()
+        .regex(/^(source|test)$/)
+        .optional()
+        .describe('Optional source type to restrict the search (\'source\' or \'test\')'),
     packagePath: z.string()
         .regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/)
         .optional()
-        .describe('Optional package path to restrict the search (e.g. \'com.myself.myproject.something\')'),
-    isTestClass: z.boolean()
-        .default(false)
-        .describe('Whether to search for a test class (true) or source class (false)')
+        .describe('Optional package path to restrict the search (e.g. \'com.myself.myproject.something\')')
 });
 
 const ClassCreateSchema = z.object({
     className: z.string().min(1)
         .describe('The name of the class to create (case sensitive)'),
+    sourceType: z.string()
+        .regex(/^(source|test)$/)
+        .describe('The source type where to create the java class file (\'source\' or \'test\')'),
     packagePath: z.string()
         .regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/)
-        .optional()
-        .describe('The package path where to create the java class file (e.g. \'com.myself.myproject.something\')'),
-    isTestClass: z.boolean()
-        .default(false)
-        .describe('Whether to to write a test class (true) or source class (false)')
+        .describe('The package path where to create the java class file (e.g. \'com.myself.myproject.something\')')
 });
 
 const AddMethodSchema = ClassLocationSchema.extend({
@@ -180,7 +180,7 @@ class TestingServer {
                 }
             }, {
                 name: "locate_java_class",
-                description: "Locate and return a java class file in the project source and test code by its name, with optional package path and source/test type",
+                description: "Locate and return a java class file from the project source or test code by its name, with optional package path",
                 inputSchema: zodToJsonSchema(ClassLocationSchema) as ToolInput
             }, {
                 name: "create_java_class",
