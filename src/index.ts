@@ -9,28 +9,18 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from 'fs/promises';
 import path from 'path';
-import * as os from "node:os";
 import {z} from "zod";
 import {zodToJsonSchema} from "zod-to-json-schema";
-import { diffLines, createTwoFilesPatch } from 'diff';
+import {applyFileEdits} from "./utils/fileEdits.js";
+import {expandHome, normalizePath} from "./utils/paths.js";
+import {ClassLocationSchema, handleLocateJavaClass, locateJavaClassTool} from "./functions/locateJavaClass.js";
+import {getJavaRootPath, searchInDirectory} from "./utils/javaFileSearch.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
     console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
     process.exit(1);
-}
-
-// Normalize all paths consistently
-function normalizePath(p: string): string {
-    return path.normalize(p).toLowerCase();
-}
-
-function expandHome(filepath: string): string {
-    if (filepath.startsWith('~/') || filepath === '~') {
-        return path.join(os.homedir(), filepath.slice(1));
-    }
-    return filepath;
 }
 
 // Store allowed directories in normalized form
@@ -52,18 +42,6 @@ await Promise.all([logDirectory].map(async (dir) => {
 }));
 
 // Schema definitions
-const ClassLocationSchema = z.object({
-    className: z.string().min(1)
-        .describe('The name of the class to find (case sensitive)'),
-    sourceType: z.string()
-        .regex(/^(source|test)$/)
-        .optional()
-        .describe('Optional source type to restrict the search (\'source\' or \'test\')'),
-    packagePath: z.string()
-        .regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/)
-        .optional()
-        .describe('Optional package path to restrict the search (e.g. \'com.myself.myproject.something\')')
-});
 
 const ClassCreateSchema = z.object({
     className: z.string().min(1)
@@ -100,104 +78,6 @@ interface FileSearchResult {
     content?: string;
 }
 
-function normalizeLineEndings(text: string): string {
-    return text.replace(/\r\n/g, '\n');
-}
-
-function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
-    // Ensure consistent line endings for diff
-    const normalizedOriginal = normalizeLineEndings(originalContent);
-    const normalizedNew = normalizeLineEndings(newContent);
-
-    return createTwoFilesPatch(
-        filepath,
-        filepath,
-        normalizedOriginal,
-        normalizedNew,
-        'original',
-        'modified'
-    );
-}
-
-async function applyFileEdits(
-    filePath: string,
-    edits: Array<{ oldText: string, newText: string }>,
-    dryRun = false
-): Promise<string> {
-    // Read file content and normalize line endings
-    const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
-
-    // Apply edits sequentially
-    let modifiedContent = content;
-    for (const edit of edits) {
-        const normalizedOld = normalizeLineEndings(edit.oldText);
-        const normalizedNew = normalizeLineEndings(edit.newText);
-
-        // If exact match exists, use it
-        if (modifiedContent.includes(normalizedOld)) {
-            modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
-            continue;
-        }
-
-        // Otherwise, try line-by-line matching with flexibility for whitespace
-        const oldLines = normalizedOld.split('\n');
-        const contentLines = modifiedContent.split('\n');
-        let matchFound = false;
-
-        for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
-            const potentialMatch = contentLines.slice(i, i + oldLines.length);
-
-            // Compare lines with normalized whitespace
-            const isMatch = oldLines.every((oldLine, j) => {
-                const contentLine = potentialMatch[j];
-                return oldLine.trim() === contentLine.trim();
-            });
-
-            if (isMatch) {
-                // Preserve original indentation of first line
-                const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
-                const newLines = normalizedNew.split('\n').map((line, j) => {
-                    if (j === 0) return originalIndent + line.trimStart();
-                    // For subsequent lines, try to preserve relative indentation
-                    const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
-                    const newIndent = line.match(/^\s*/)?.[0] || '';
-                    if (oldIndent && newIndent) {
-                        const relativeIndent = newIndent.length - oldIndent.length;
-                        return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
-                    }
-                    return line;
-                });
-
-                contentLines.splice(i, oldLines.length, ...newLines);
-                modifiedContent = contentLines.join('\n');
-                matchFound = true;
-                break;
-            }
-        }
-
-        if (!matchFound) {
-            throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
-        }
-    }
-
-    // Create unified diff
-    const diff = createUnifiedDiff(content, modifiedContent, filePath);
-
-    // Format diff with appropriate number of backticks
-    let numBackticks = 3;
-    while (diff.includes('`'.repeat(numBackticks))) {
-        numBackticks++;
-    }
-    const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
-
-    if (!dryRun) {
-        await fs.writeFile(filePath, modifiedContent, 'utf-8');
-    }
-
-    return formattedDiff;
-}
-
-
 class TestingServer {
     private server: Server;
     private readonly logPath: string;
@@ -220,51 +100,7 @@ class TestingServer {
     }
 
     private async searchJavaFile(searchPath: string, className: string): Promise<FileSearchResult> {
-        async function searchInDirectory(dirPath: string): Promise<FileSearchResult> {
-            try {
-                const entries = await fs.readdir(dirPath, {withFileTypes: true});
-
-                for (const entry of entries) {
-                    const fullPath = path.join(dirPath, entry.name);
-
-                    if (entry.isDirectory()) {
-                        const result = await searchInDirectory(fullPath);
-                        if (result.found) return result;
-                    } else if (entry.isFile()) {
-                        const expectedFileName = `${className}.java`;
-                        if (entry.name === expectedFileName) {
-                            const content = await fs.readFile(fullPath, 'utf-8');
-                            const relativePath = path.relative(projectPath, fullPath);
-                            return {
-                                found: true,
-                                filepath: relativePath.replace(/\\/g, '/'),
-                                content
-                            };
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error(`Error searching directory ${dirPath}:`, error);
-            }
-            return {found: false};
-        }
-
-        return await searchInDirectory(searchPath);
-    }
-
-    private getJavaRootPath(sourceType: string | undefined, packagePath?: string): string {
-        let searchPath = path.join(this.projectPath, 'src');
-        if (sourceType === 'test')
-            searchPath = path.join(searchPath, 'test');
-        else if (sourceType === 'source')
-            searchPath = path.join(this.projectPath, 'main');
-        searchPath = path.join(searchPath, 'java');
-
-        if (packagePath) {
-            searchPath = path.join(searchPath, ...packagePath.split('.'));
-        }
-
-        return searchPath;
+        return await searchInDirectory(searchPath, className, projectPath);
     }
 
     private setupHandlers(): void {
@@ -277,11 +113,7 @@ class TestingServer {
                     properties: {},
                     required: []
                 }
-            }, {
-                name: "locate_java_class",
-                description: "Locate and return a java class file from the project source or test code by its name, with optional package path",
-                inputSchema: zodToJsonSchema(ClassLocationSchema) as ToolInput
-            }, {
+            }, locateJavaClassTool, {
                 name: "create_java_class",
                 description: "Create a new Java class file in the project source or test code with package path and source/test specification",
                 inputSchema: zodToJsonSchema(ClassCreateSchema) as ToolInput
@@ -297,38 +129,8 @@ class TestingServer {
         }));
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-            if (request.params.name === "locate_java_class") {
-                const parsed = ClassLocationSchema.safeParse(request.params.arguments);
-                if (!parsed.success)
-                    throw new Error(`Invalid arguments for locate_java_class: ${parsed.error}`);
-
-                try {
-                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
-                    try {
-                        await fs.access(searchPath);
-                    } catch {
-                        return {
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({found: false})
-                            }]
-                        };
-                    }
-
-                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
-                    return {
-                        content: [{
-                            type: "text",
-                            text: JSON.stringify(result)
-                        }]
-                    };
-                } catch (error) {
-                    throw new McpError(
-                        ErrorCode.InternalError,
-                        `Failed to search for class: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            }
+            if (request.params.name === "locate_java_class")
+                return handleLocateJavaClass(projectPath, request.params.arguments);
 
             if (request.params.name === "create_java_class") {
                 const parsed = ClassCreateSchema.safeParse(request.params.arguments);
@@ -336,7 +138,7 @@ class TestingServer {
                     throw new Error(`Invalid arguments for create_java_class: ${parsed.error}`);
 
                 try {
-                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
+                    const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
 
                     // Ensure directory exists
                     await fs.mkdir(searchPath, {recursive: true});
@@ -392,7 +194,7 @@ class TestingServer {
                     throw new Error(`Invalid arguments for class_add_body: ${parsed.error}`);
 
                 try {
-                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
+                    const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
                     const result = await this.searchJavaFile(searchPath, parsed.data.className);
                     if (!result.found || !result.filepath || !result.content)
                         throw new Error(`Class file not found: ${parsed.data.className}`);
@@ -432,7 +234,7 @@ class TestingServer {
                     throw new Error(`Invalid arguments for class_replace_body: ${parsed.error}`);
 
                 try {
-                    const searchPath = this.getJavaRootPath(parsed.data.sourceType, parsed.data.packagePath);
+                    const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
                     const result = await this.searchJavaFile(searchPath, parsed.data.className);
                     if (!result.found || !result.filepath || !result.content)
                         throw new Error(`Class file not found: ${parsed.data.className}`);
