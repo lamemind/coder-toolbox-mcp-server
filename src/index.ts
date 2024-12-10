@@ -118,7 +118,8 @@ class TestingServer {
                 return handleLocateJavaClass(projectPath, request.params.arguments);
 
             if (request.params.name === "create_java_class")
-                return createJavaClass(projectPath, request.params.arguments);
+                return createJavaClass(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
             if (request.params.name === "class_add_body") {
                 const parsed = AddClassBodySchema.safeParse(request.params.arguments);
