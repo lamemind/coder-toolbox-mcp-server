@@ -8,57 +8,64 @@ A utility toolkit designed to enhance the interaction between Claude and code, p
 - Test Execution Logs: Retrieve and analyze test execution logs and results
 - Class Operations:
   - Location: Find Java classes in project source code with package filtering
-  - Creation: Create new Java classes with proper package structure
-  - Method Addition: Add new methods to existing Java classes
-  - Import Management: Add and organize import statements in Java classes
-  - Constructor Addition: Add new constructors to existing Java classes
+  - Creation: Create new Java classes with proper package structure 
+  - Content Management: Add, replace or delete content in existing Java classes
+  - Method Management: Add or delete methods in Java classes
+  - Constructor Management: Add or delete constructors in Java classes
 
 ## Tools
 
-### get_test_logs
-Retrieve test execution logs
+### get_test_execution_logs
+Retrieve test execution logs from the log directory
 
 ### locate_java_class
 - Parameters:
   - `className` (string): Name of the java class to find (case sensitive)
-  - `packagePath` (string, optional): Package path to restrict search (e.g. 'com.myself.myproject')
-  - `isTestClass` (boolean, default false): Whether to search in test or main source directory
-- Returns:
-  - `found` (boolean): Whether the class was found
-  - `filepath` (string, optional): Relative path to the found file
-  - `content` (string, optional): Content of the found file
+  - `sourceType` (string, optional): Source type to restrict the search ('source' or 'test')
+  - `packagePath` (string, optional): Package path to restrict search (e.g. 'com.myself.myproject'). If specified, sourceType must also be specified
+- Returns: JSON object with search results including file path and content if found
 
-### create_java_class
+### create_java_class  
 - Parameters:
   - `className` (string): Name of the java class to create (case sensitive)
-  - `packagePath` (string, optional): Package path where to create the class (e.g. 'com.myself.myproject')
-  - `isTestClass` (boolean, default false): Whether to create in test or main source directory
-- Returns:
-  - `success` (boolean): Whether the class was created
-  - `filepath` (string, optional): Path of the created file
-  - `error` (string, optional): Error message if operation failed
+  - `sourceType` (string): The source type where to create the file ('source' or 'test')
+  - `packagePath` (string): Package path where to create the class (e.g. 'com.myself.myproject')
+- Returns: JSON object with creation results including file path or error message
 
 ### class_add_body
 - Parameters:
-  - All parameters from locate_java_class, plus:
-  - `classBody` (string): The class body content to add, including fields, methods, constructors, etc.
-- Returns:
-  - `success` (boolean): Whether the content was added
-  - `filepath` (string, optional): Path of the modified file
-  - `error` (string, optional): Error message if operation failed
+  - Parameters from locate_java_class, plus:
+  - `classBody` (string): The class body content to add (fields, methods, constructors, etc.)
+- Returns: JSON object with modification results including file path
+
+### class_replace_body
+- Parameters:
+  - Parameters from locate_java_class, plus:  
+  - `edits`: Array of edit operations, each containing:
+    - `oldText` (string): Text to replace
+    - `newText` (string): New text
+  - `dryRun` (boolean, optional): Preview changes without applying them
+- Returns: Diff showing the changes made or preview
+
+### class_delete_body
+- Parameters:
+  - Parameters from locate_java_class, plus:
+  - `targetContent` (string): The content to delete from the class body
+  - `dryRun` (boolean, optional): Preview changes without applying them
+- Returns: Diff showing the changes made or preview
 
 ## Development Roadmap
 - [x] Test execution log retrieval
-- [x] Class-based code navigation
-- [x] Method-level file modification
+- [x] Class location and navigation 
 - [x] Class file creation
-- [x] Import statement management
-- [ ] Add class field
-- [ ] Add class annotation
-- [x] Add class constructor
-- [ ] Add class interface implementation
+- [x] Add content to class
+- [x] Replace content in class
+- [x] Delete content from class
+- [ ] Add class-level annotations
+- [ ] Add interface implementations
 - [ ] Add class inheritance
-- [ ] Reorganize class code
+- [ ] Organize imports
+- [ ] Format code
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
