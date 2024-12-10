@@ -17,6 +17,7 @@ import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.
 import {addClassBody, classAddBodyTool} from "./functions/classAddBody.js";
 import {classReplaceBodyTool, replaceClassBody} from "./functions/classReplaceBody.js";
 import {classDeleteBodyTool, deleteClassBody} from "./functions/classDeleteBody.js";
+import {classRewriteHeaderTool, rewriteClassHeader} from "./functions/classRewriteHeader.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -96,7 +97,7 @@ class TestingServer {
                     properties: {},
                     required: []
                 }
-            }, locateJavaClassTool, createJavaClassTool, classAddBodyTool, classReplaceBodyTool, classDeleteBodyTool]
+            }, locateJavaClassTool, createJavaClassTool, classAddBodyTool, classReplaceBodyTool, classDeleteBodyTool, classRewriteHeaderTool]
         }));
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -118,6 +119,10 @@ class TestingServer {
 
             if (request.params.name === "class_delete_body")
                 return deleteClassBody(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: result}]}));
+
+            if (request.params.name === "class_rewrite_header")
+                return rewriteClassHeader(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: result}]}));
 
             if (request.params.name === "get_test_execution_logs") {
