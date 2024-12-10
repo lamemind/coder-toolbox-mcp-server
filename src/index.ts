@@ -233,12 +233,12 @@ class TestingServer {
 
                 try {
                     const searchPath = this.getJavaRootPath(parsed.data.isTestClass, parsed.data.packagePath);
-                    
+
                     // Ensure directory exists
                     await fs.mkdir(searchPath, { recursive: true });
-                    
+
                     const filePath = path.join(searchPath, `${parsed.data.className}.java`);
-                    
+
                     // Check if file already exists
                     try {
                         await fs.access(filePath);
@@ -260,7 +260,7 @@ class TestingServer {
                     if (parsed.data.packagePath) {
                         content += `package ${parsed.data.packagePath};\n\n`;
                     }
-                    content += `public class ${parsed.data.className} {\n}\n`;
+                    content += `public class ${parsed.data.className} {\n}\n}`;
 
                     // Write the file
                     await fs.writeFile(filePath, content, 'utf-8');
