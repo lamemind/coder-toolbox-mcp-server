@@ -16,6 +16,7 @@ import {searchInDirectory} from "./utils/javaFileSearch.js";
 import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.js";
 import {addClassBody, classAddBodyTool} from "./functions/classAddBody.js";
 import {classReplaceBodyTool, replaceClassBody} from "./functions/classReplaceBody.js";
+import {classDeleteBodyTool, deleteClassBody} from "./functions/classDeleteBody.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -95,7 +96,7 @@ class TestingServer {
                     properties: {},
                     required: []
                 }
-            }, locateJavaClassTool, createJavaClassTool, classAddBodyTool, classReplaceBodyTool]
+            }, locateJavaClassTool, createJavaClassTool, classAddBodyTool, classReplaceBodyTool, classDeleteBodyTool]
         }));
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -113,6 +114,10 @@ class TestingServer {
 
             if (request.params.name === "class_replace_body")
                 return replaceClassBody(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: result}]}));
+
+            if (request.params.name === "class_delete_body")
+                return deleteClassBody(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: result}]}));
 
             if (request.params.name === "get_test_execution_logs") {
