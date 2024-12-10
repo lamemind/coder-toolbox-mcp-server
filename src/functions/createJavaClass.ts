@@ -70,9 +70,7 @@ export async function createJavaClass(
             filepath: path.relative(projectPath, filePath).replace(/\\/g, '/')
         };
     } catch (error) {
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : String(error)
-        };
+        if (error instanceof McpError) throw error;
+        throw new McpError(ErrorCode.InternalError, `Failed to create class: ${error instanceof Error ? error.message : String(error)}`);
     }
 }

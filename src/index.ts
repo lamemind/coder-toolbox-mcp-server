@@ -16,6 +16,7 @@ import {expandHome, normalizePath} from "./utils/paths.js";
 import {ClassLocationSchema, handleLocateJavaClass, locateJavaClassTool} from "./functions/locateJavaClass.js";
 import {getJavaRootPath, searchInDirectory} from "./utils/javaFileSearch.js";
 import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.js";
+import {addClassBody, classAddBodyTool} from "./functions/classAddBody.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -43,11 +44,6 @@ await Promise.all([logDirectory].map(async (dir) => {
 }));
 
 // Schema definitions
-const AddClassBodySchema = ClassLocationSchema.extend({
-    classBody: z.string().min(1)
-        .describe('The class body to add, including fields, methods, constructors, etc.')
-});
-
 const EditOperation = z.object({
     oldText: z.string().describe('Text to search for - must match exactly'),
     newText: z.string().describe('Text to replace with')
@@ -102,11 +98,7 @@ class TestingServer {
                     properties: {},
                     required: []
                 }
-            }, locateJavaClassTool, createJavaClassTool, {
-                name: "class_add_body",
-                description: "Add new content to an existing Java class body, including fields, methods, constructors, etc.",
-                inputSchema: zodToJsonSchema(AddClassBodySchema) as ToolInput
-            }, {
+            }, locateJavaClassTool, createJavaClassTool, classAddBodyTool, {
                 name: "class_replace_body",
                 description: "Replace the a portion of the existing Java class body with new content",
                 inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput
@@ -115,51 +107,16 @@ class TestingServer {
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (request.params.name === "locate_java_class")
-                return handleLocateJavaClass(projectPath, request.params.arguments);
+                return handleLocateJavaClass(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
             if (request.params.name === "create_java_class")
                 return createJavaClass(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
-            if (request.params.name === "class_add_body") {
-                const parsed = AddClassBodySchema.safeParse(request.params.arguments);
-                if (!parsed.success)
-                    throw new Error(`Invalid arguments for class_add_body: ${parsed.error}`);
-
-                try {
-                    const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
-                    const result = await this.searchJavaFile(searchPath, parsed.data.className);
-                    if (!result.found || !result.filepath || !result.content)
-                        throw new Error(`Class file not found: ${parsed.data.className}`);
-
-                    const fileContent = result.content;
-                    const classEndMatch = fileContent.match(/^}/m);
-                    if (!classEndMatch || !classEndMatch.index)
-                        throw new Error("Invalid class file format - missing closing brace");
-
-                    const insertPosition = classEndMatch.index;
-                    const newContent = fileContent.slice(0, insertPosition) +
-                        "\n\n" + parsed.data.classBody + "\n" +
-                        fileContent.slice(insertPosition);
-
-                    const fullPath = path.join(this.projectPath, result.filepath);
-                    await fs.writeFile(fullPath, newContent, 'utf-8');
-
-                    return {
-                        content: [{
-                            type: "text", text: JSON.stringify({
-                                success: true,
-                                filepath: result.filepath
-                            })
-                        }]
-                    };
-                } catch (error) {
-                    throw new McpError(
-                        ErrorCode.InternalError,
-                        `Failed to add class body: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            }
+            if (request.params.name === "class_add_body")
+                return addClassBody(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
             if (request.params.name === "class_replace_body") {
                 const parsed = EditFileArgsSchema.safeParse(args);

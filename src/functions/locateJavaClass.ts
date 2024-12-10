@@ -50,17 +50,8 @@ export async function handleLocateJavaClass(
             };
         }
 
-        const result = await searchInDirectory(searchPath, parsed.data.className, projectPath);
-        return {
-            content: [{
-                type: "text",
-                text: JSON.stringify(result)
-            }]
-        };
+        return await searchInDirectory(searchPath, parsed.data.className, projectPath);
     } catch (error) {
-        throw new McpError(
-            ErrorCode.InternalError,
-            `Failed to search for class: ${error instanceof Error ? error.message : String(error)}`
-        );
+        throw new McpError(ErrorCode.InternalError, `Failed to search for class: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
