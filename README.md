@@ -76,6 +76,7 @@ Retrieve test execution logs
 - [x] Add class constructor
 - [ ] Add class interface implementation
 - [ ] Add class inheritance
+- [ ] Reorganize class code
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.

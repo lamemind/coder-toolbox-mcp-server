@@ -180,11 +180,11 @@ class TestingServer {
                 }
             }, {
                 name: "locate_java_class",
-                description: "Locate and return a java class file in the project source code by its name, with optional package path and type filtering",
+                description: "Locate and return a java class file in the project source and test code by its name, with optional package path and source/test type",
                 inputSchema: zodToJsonSchema(ClassLocationSchema) as ToolInput
             }, {
                 name: "create_java_class",
-                description: "Create a new Java class file in the project source code with optional package path and type specification (source or test)",
+                description: "Create a new Java class file in the project source or test code with package path and source/test specification",
                 inputSchema: zodToJsonSchema(ClassCreateSchema) as ToolInput
             }, {
                 name: "class_add_method",
@@ -463,9 +463,9 @@ class TestingServer {
                     }
 
                     // Find opening brace of class
-                    const openBraceIndex = lines.findIndex((line, index) => 
+                    const openBraceIndex = lines.findIndex((line, index) =>
                         index >= classLineIndex && line.includes('{'));
-                    
+
                     if (openBraceIndex === -1) {
                         return {
                             content: [{
@@ -502,7 +502,7 @@ class TestingServer {
                 }
             }
 
-            if (request.params.name === "get_test_logs") {
+            if (request.params.name === "get_test_execution_logs") {
                 try {
                     const files = await fs.readdir(this.logPath);
                     const logFiles = files.filter(file => file.endsWith('.log'));
