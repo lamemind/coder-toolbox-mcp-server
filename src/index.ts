@@ -16,11 +16,12 @@ import {searchInDirectory} from "./utils/javaFileSearch.js";
 import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.js";
 // import {addClassBody, classAddBodyTool} from "./functions/classAddBody.js";
 // import {classReplaceBodyTool, classReplaceBody} from "./functions/classReplaceBody.js";
-import {classReplaceContent, classReplaceContentTool} from "./functions/classReplaceContent.js";
-import {classDeleteBodyTool, deleteClassBody} from "./functions/classDeleteBody.js";
-import {classRewriteHeaderTool, rewriteClassHeader} from "./functions/classRewriteHeader.js";
-import {classRewriteFullTool, rewriteClassFull} from "./functions/classRewriteFull.js";
+// import {classDeleteBodyTool, deleteClassBody} from "./functions/classDeleteBody.js";
+// import {classRewriteHeaderTool, rewriteClassHeader} from "./functions/classRewriteHeader.js";
+import {rewriteClassFull, classRewriteFullTool} from "./functions/classRewriteFull.js";
 import {classAddContent, classAddContentTool} from "./functions/classAddContent.js";
+import {classReplaceContent, classReplaceContentTool} from "./functions/classReplaceContent.js";
+import {classDeleteContent, classDeleteContentTool} from "./functions/classDeleteContent.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -103,9 +104,12 @@ class TestingServer {
             }, locateJavaClassTool, createJavaClassTool,
                 // classAddBodyTool,
                 // classReplaceBodyTool,
+                // classRewriteHeaderTool,
+                // classDeleteBodyTool,
                 classAddContentTool,
                 classReplaceContentTool,
-                classDeleteBodyTool, classRewriteHeaderTool, classRewriteFullTool
+                classDeleteContentTool,
+                classRewriteFullTool
             ]
         }));
 
@@ -126,13 +130,13 @@ class TestingServer {
             //     return classReplaceBody(projectPath, request.params.arguments)
             //         .then(result => ({content: [{type: "text", text: result}]}));
 
-            if (request.params.name === "class_delete_body")
-                return deleteClassBody(projectPath, request.params.arguments)
-                    .then(result => ({content: [{type: "text", text: result}]}));
+            // if (request.params.name === "class_delete_body")
+            //     return deleteClassBody(projectPath, request.params.arguments)
+            //         .then(result => ({content: [{type: "text", text: result}]}));
 
-            if (request.params.name === "class_rewrite_header")
-                return rewriteClassHeader(projectPath, request.params.arguments)
-                    .then(result => ({content: [{type: "text", text: result}]}));
+            // if (request.params.name === "class_rewrite_header")
+            //     return rewriteClassHeader(projectPath, request.params.arguments)
+            //         .then(result => ({content: [{type: "text", text: result}]}));
 
             if (request.params.name === "class_rewrite_full")
                 return rewriteClassFull(projectPath, request.params.arguments)
@@ -144,6 +148,10 @@ class TestingServer {
 
             if (request.params.name === "class_replace_content")
                 return classReplaceContent(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: result}]}));
+
+            if (request.params.name === "class_delete_content")
+                return classDeleteContent(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: result}]}));
 
             if (request.params.name === "get_test_execution_logs") {
