@@ -1,24 +1,13 @@
 import {Server} from "@modelcontextprotocol/sdk/server/index.js";
 import {StdioServerTransport} from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-    CallToolRequestSchema,
-    ErrorCode,
-    ListToolsRequestSchema,
-    McpError,
-    ToolSchema
-} from "@modelcontextprotocol/sdk/types.js";
+import {CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError} from "@modelcontextprotocol/sdk/types.js";
 import fs from 'fs/promises';
 import path from 'path';
-import {z} from "zod";
 import {expandHome, normalizePath} from "./utils/paths.js";
-import {ClassLocationSchema, handleLocateJavaClass, locateJavaClassTool} from "./functions/locateJavaClass.js";
-import {searchInDirectory} from "./utils/javaFileSearch.js";
+
+import {handleLocateJavaClass, locateJavaClassTool} from "./functions/locateJavaClass.js";
 import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.js";
-// import {addClassBody, classAddBodyTool} from "./functions/classAddBody.js";
-// import {classReplaceBodyTool, classReplaceBody} from "./functions/classReplaceBody.js";
-// import {classDeleteBodyTool, deleteClassBody} from "./functions/classDeleteBody.js";
-// import {classRewriteHeaderTool, rewriteClassHeader} from "./functions/classRewriteHeader.js";
-import {rewriteClassFull, classRewriteFullTool} from "./functions/classRewriteFull.js";
+import {classRewriteFullTool, rewriteClassFull} from "./functions/classRewriteFull.js";
 import {classAddContent, classAddContentTool} from "./functions/classAddContent.js";
 import {classReplaceContent, classReplaceContentTool} from "./functions/classReplaceContent.js";
 import {classDeleteContent, classDeleteContentTool} from "./functions/classDeleteContent.js";
@@ -48,26 +37,6 @@ await Promise.all([logDirectory].map(async (dir) => {
     }
 }));
 
-// Schema definitions
-const EditOperation = z.object({
-    oldText: z.string().describe('Text to search for - must match exactly'),
-    newText: z.string().describe('Text to replace with')
-});
-
-const EditFileArgsSchema = ClassLocationSchema.extend({
-    edits: z.array(EditOperation),
-    dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
-});
-
-const ToolInputSchema = ToolSchema.shape.inputSchema;
-type ToolInput = z.infer<typeof ToolInputSchema>;
-
-interface FileSearchResult {
-    found: boolean;
-    filepath?: string;
-    content?: string;
-}
-
 class TestingServer {
     private server: Server;
     private readonly logPath: string;
@@ -87,10 +56,6 @@ class TestingServer {
         this.setupHandlers();
     }
 
-    private async searchJavaFile(searchPath: string, className: string): Promise<FileSearchResult> {
-        return await searchInDirectory(searchPath, className, projectPath);
-    }
-
     private setupHandlers(): void {
         this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
             tools: [{
@@ -101,11 +66,8 @@ class TestingServer {
                     properties: {},
                     required: []
                 }
-            }, locateJavaClassTool, createJavaClassTool,
-                // classAddBodyTool,
-                // classReplaceBodyTool,
-                // classRewriteHeaderTool,
-                // classDeleteBodyTool,
+            }, locateJavaClassTool,
+                createJavaClassTool,
                 classAddContentTool,
                 classReplaceContentTool,
                 classDeleteContentTool,
@@ -121,22 +83,6 @@ class TestingServer {
             if (request.params.name === "create_java_class")
                 return createJavaClass(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
-
-            // if (request.params.name === "class_add_body")
-            //     return addClassBody(projectPath, request.params.arguments)
-            //         .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
-
-            // if (request.params.name === "class_replace_body")
-            //     return classReplaceBody(projectPath, request.params.arguments)
-            //         .then(result => ({content: [{type: "text", text: result}]}));
-
-            // if (request.params.name === "class_delete_body")
-            //     return deleteClassBody(projectPath, request.params.arguments)
-            //         .then(result => ({content: [{type: "text", text: result}]}));
-
-            // if (request.params.name === "class_rewrite_header")
-            //     return rewriteClassHeader(projectPath, request.params.arguments)
-            //         .then(result => ({content: [{type: "text", text: result}]}));
 
             if (request.params.name === "class_rewrite_full")
                 return rewriteClassFull(projectPath, request.params.arguments)

@@ -18,7 +18,6 @@ export const ClassAddContentSchema = ClassLocationSchema.extend({
 
 export const classAddContentTool = {
     name: "class_add_content",
-    // description: "Add content to a Java class file at a specific injection point",
     description: `Add content to a Java class file at a specific injection point. Examples:
 - Add new import (injectionPoint: 'import'):
   content: "import java.util.ArrayList;"

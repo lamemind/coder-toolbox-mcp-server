@@ -5,6 +5,7 @@ import {ClassLocationSchema} from "./locateJavaClass.js";
 import {getJavaRootPath, searchInDirectory} from "../utils/javaFileSearch.js";
 import {applyFileEdits} from "../utils/fileEdits.js";
 import path from "path";
+import {ClassAddContentSchema} from "./classAddContent.js";
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
@@ -18,7 +19,7 @@ export const ClassDeleteContentSchema = ClassLocationSchema.extend({
 
 export const classDeleteContentTool = {
     name: "class_delete_content",
-    description: `Delete any content from a Java class file. Examples:
+    description: `Remove any content from a Java class file. Examples:
 - Remove unused imports: 
   targetContent: "import java.util.List;"
 - Delete a method:
@@ -27,7 +28,8 @@ export const classDeleteContentTool = {
   targetContent: "@Deprecated\n@SuppressWarnings("unused")"
 - Delete interface implementation:
   targetContent: "implements UnusedInterface"
-`
+`,
+    inputSchema: zodToJsonSchema(ClassAddContentSchema) as ToolInput
 };
 
 export async function classDeleteContent(

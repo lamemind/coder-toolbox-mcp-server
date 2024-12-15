@@ -18,32 +18,66 @@ export const ClassCreateSchema = z.object({
         .describe('The source type where to create the java class file (\'source\' or \'test\')'),
     packagePath: z.string()
         .regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/)
-        .describe('The package path where to create the java class file (e.g. \'com.myself.myproject.something\')')
+        .describe('The package path where to create the java class file (e.g. \'com.myself.myproject.something\')'),
+    content: z.string()
+        .optional()
+        .describe('Optional initial content for the class. Must include a valid class declaration matching className and packagePath.')
 });
 
 // Tool declaration
 export const createJavaClassTool = {
     name: "create_java_class",
-    description: "Create a new Java class file in the project source or test code with package path and source/test specification",
+    description: `Create a new Java class file. Examples:
+- Simple class:
+  className: "MyClass", sourceType: "source", packagePath: "com.example"
+- With initial content:
+  content: "public class MyClass { 
+    private String name;
+    public MyClass(String name) {
+        this.name = name;
+    }
+  }"
+Note: if content is provided, the class declaration must match className and packagePath`,
     inputSchema: zodToJsonSchema(ClassCreateSchema) as ToolInput
 };
+
+function validateContent(content: string | undefined, className: string, packagePath: string): void {
+    if (!content) return;
+
+    const packageMatch = content.match(/^\s*package\s+([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)\s*;/m);
+    if (!packageMatch || packageMatch[1] !== packagePath) {
+        throw new McpError(ErrorCode.InvalidRequest,
+            `Content package declaration must be 'package ${packagePath};'`);
+    }
+
+    const classMatch = content.match(/\bclass\s+([A-Za-z_][A-Za-z0-9_]*)/);
+    if (!classMatch || classMatch[1] !== className) {
+        throw new McpError(ErrorCode.InvalidRequest,
+            `Content class declaration must match className: ${className}`);
+    }
+}
 
 // Function implementation
 export async function createJavaClass(
     projectPath: string,
     args: unknown
 ): Promise<{ success: boolean; filepath?: string; error?: string }> {
-    const parsed = ClassLocationSchema.safeParse(args);
+    const parsed = ClassCreateSchema.safeParse(args);
     if (!parsed.success)
         throw new McpError(ErrorCode.InvalidRequest, `Invalid arguments for locate_java_class: ${parsed.error}`);
 
     try {
-        const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
+        const {className, sourceType, packagePath, content} = parsed.data;
+        if (content) {
+            validateContent(content, className, packagePath);
+        }
+
+        const searchPath = getJavaRootPath(projectPath, sourceType, packagePath);
 
         // Ensure directory exists
         await fs.mkdir(searchPath, {recursive: true});
 
-        const filePath = path.join(searchPath, `${parsed.data.className}.java`);
+        const filePath = path.join(searchPath, `${className}.java`);
 
         // Check if file already exists
         try {
@@ -57,13 +91,13 @@ export async function createJavaClass(
         }
 
         // Create class content
-        let content = '';
-        if (parsed.data.packagePath)
-            content += `package ${parsed.data.packagePath};\n\n`;
-        content += `public class ${parsed.data.className} {\n\n}`;
+        let fileContent = content;
+        if (!fileContent) {
+            fileContent = `package ${packagePath};\n\npublic class ${className} {\n\n}`;
+        }
 
         // Write the file
-        await fs.writeFile(filePath, content, 'utf-8');
+        await fs.writeFile(filePath, fileContent, 'utf-8');
 
         return {
             success: true,
