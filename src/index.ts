@@ -14,10 +14,13 @@ import {expandHome, normalizePath} from "./utils/paths.js";
 import {ClassLocationSchema, handleLocateJavaClass, locateJavaClassTool} from "./functions/locateJavaClass.js";
 import {searchInDirectory} from "./utils/javaFileSearch.js";
 import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.js";
-import {addClassBody, classAddBodyTool} from "./functions/classAddBody.js";
-import {classReplaceBodyTool, replaceClassBody} from "./functions/classReplaceBody.js";
+// import {addClassBody, classAddBodyTool} from "./functions/classAddBody.js";
+// import {classReplaceBodyTool, classReplaceBody} from "./functions/classReplaceBody.js";
+import {classReplaceContent, classReplaceContentTool} from "./functions/classReplaceContent.js";
 import {classDeleteBodyTool, deleteClassBody} from "./functions/classDeleteBody.js";
 import {classRewriteHeaderTool, rewriteClassHeader} from "./functions/classRewriteHeader.js";
+import {classRewriteFullTool, rewriteClassFull} from "./functions/classRewriteFull.js";
+import {classAddContent, classAddContentTool} from "./functions/classAddContent.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -97,7 +100,13 @@ class TestingServer {
                     properties: {},
                     required: []
                 }
-            }, locateJavaClassTool, createJavaClassTool, classAddBodyTool, classReplaceBodyTool, classDeleteBodyTool, classRewriteHeaderTool]
+            }, locateJavaClassTool, createJavaClassTool,
+                // classAddBodyTool,
+                // classReplaceBodyTool,
+                classAddContentTool,
+                classReplaceContentTool,
+                classDeleteBodyTool, classRewriteHeaderTool, classRewriteFullTool
+            ]
         }));
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -109,13 +118,13 @@ class TestingServer {
                 return createJavaClass(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
-            if (request.params.name === "class_add_body")
-                return addClassBody(projectPath, request.params.arguments)
-                    .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
+            // if (request.params.name === "class_add_body")
+            //     return addClassBody(projectPath, request.params.arguments)
+            //         .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
-            if (request.params.name === "class_replace_body")
-                return replaceClassBody(projectPath, request.params.arguments)
-                    .then(result => ({content: [{type: "text", text: result}]}));
+            // if (request.params.name === "class_replace_body")
+            //     return classReplaceBody(projectPath, request.params.arguments)
+            //         .then(result => ({content: [{type: "text", text: result}]}));
 
             if (request.params.name === "class_delete_body")
                 return deleteClassBody(projectPath, request.params.arguments)
@@ -123,6 +132,18 @@ class TestingServer {
 
             if (request.params.name === "class_rewrite_header")
                 return rewriteClassHeader(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: result}]}));
+
+            if (request.params.name === "class_rewrite_full")
+                return rewriteClassFull(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: result}]}));
+
+            if (request.params.name === "class_add_content")
+                return classAddContent(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: result}]}));
+
+            if (request.params.name === "class_replace_content")
+                return classReplaceContent(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: result}]}));
 
             if (request.params.name === "get_test_execution_logs") {

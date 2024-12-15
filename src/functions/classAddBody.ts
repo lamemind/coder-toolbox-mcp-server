@@ -18,7 +18,7 @@ export const ClassAddBodySchema = ClassLocationSchema.extend({
 // Tool declaration
 export const classAddBodyTool = {
     name: "class_add_body",
-    description: "Add new content to an existing Java class body, including fields, methods, constructors, etc.",
+    description: "Add new content to an existing Java class body, including fields, methods, constructors, etc. For imports and annotations, use class_rewrite_header.",
     inputSchema: zodToJsonSchema(ClassAddBodySchema) as ToolInput
 };
 

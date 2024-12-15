@@ -14,39 +14,39 @@ const EditOperation = z.object({
     newText: z.string().describe('Text to replace with')
 });
 
-// Schema definition
-export const ClassReplaceBodySchema = ClassLocationSchema.extend({
+export const ClassReplaceContentSchema = ClassLocationSchema.extend({
     edits: z.array(EditOperation),
     dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
 });
 
-// Tool declaration
-export const classReplaceBodyTool = {
-    name: "class_replace_body",
-    description: "Replace the a portion of the existing Java class body with new content",
-    inputSchema: zodToJsonSchema(ClassReplaceBodySchema) as ToolInput
+export const classReplaceContentTool = {
+    name: "class_replace_content",
+    description: "Replace any content in a Java class file. This is a generic search and replace operation.",
+    inputSchema: zodToJsonSchema(ClassReplaceContentSchema) as ToolInput
 };
 
-// Function implementation
-export async function classReplaceBody(
+export async function classReplaceContent(
     projectPath: string,
     args: unknown
 ) {
-    const parsed = ClassReplaceBodySchema.safeParse(args);
-    if (!parsed.success)
-        throw new McpError(ErrorCode.InvalidRequest, `Invalid arguments for class_replace_body: ${parsed.error}`);
+    const parsed = ClassReplaceContentSchema.safeParse(args);
+    if (!parsed.success) {
+        throw new McpError(ErrorCode.InvalidRequest, `Invalid arguments: ${parsed.error}`);
+    }
 
     try {
         const searchPath = getJavaRootPath(projectPath, parsed.data.sourceType, parsed.data.packagePath);
         const result = await searchInDirectory(searchPath, parsed.data.className, projectPath);
 
-        if (!result.found || !result.filepath)
+        if (!result.found || !result.filepath) {
             throw new McpError(ErrorCode.InvalidRequest, `Class file not found: ${parsed.data.className}`);
+        }
 
         const fullPath = path.join(projectPath, result.filepath);
         return await applyFileEdits(fullPath, parsed.data.edits, parsed.data.dryRun);
     } catch (error) {
         if (error instanceof McpError) throw error;
-        throw new McpError(ErrorCode.InternalError, `Failed to replace class body: ${error instanceof Error ? error.message : String(error)}`);
+        throw new McpError(ErrorCode.InternalError,
+            `Failed to replace content: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
