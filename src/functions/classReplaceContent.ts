@@ -21,7 +21,18 @@ export const ClassReplaceContentSchema = ClassLocationSchema.extend({
 
 export const classReplaceContentTool = {
     name: "class_replace_content",
-    description: "Replace any content in a Java class file. This is a generic search and replace operation.",
+    // description: "Replace any content in a Java class file. This is a generic search and replace operation.",
+    description: `Replace any content in a Java class file. This is a generic search and replace operation. Use this function when modifying 'implements' or 'extends' clauses. Examples:
+- Add interface implementation:
+  oldText: "class MyClass extends BaseClass"
+  newText: "class MyClass extends BaseClass implements Interface"
+- Update base class:
+  oldText: "class MyClass extends OldBase"
+  newText: "class MyClass extends NewBase"
+- Replace method:
+  oldText: "void process() { return input * 2; }"
+  newText: "void process() { return input * factor; }"
+`,
     inputSchema: zodToJsonSchema(ClassReplaceContentSchema) as ToolInput
 };
 

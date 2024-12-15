@@ -18,7 +18,15 @@ export const ClassAddContentSchema = ClassLocationSchema.extend({
 
 export const classAddContentTool = {
     name: "class_add_content",
-    description: "Add content to a Java class file at a specific injection point",
+    // description: "Add content to a Java class file at a specific injection point",
+    description: `Add content to a Java class file at a specific injection point. Examples:
+- Add new import (injectionPoint: 'import'):
+  content: "import java.util.ArrayList;"
+- Add class annotation (injectionPoint: 'annotation'): 
+  content: "@Service\n@Transactional"
+- Add new method (injectionPoint: 'class_content'):
+  content: "public void calculate() { ... }"
+`,
     inputSchema: zodToJsonSchema(ClassAddContentSchema) as ToolInput
 };
 
