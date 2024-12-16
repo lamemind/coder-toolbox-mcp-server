@@ -7,6 +7,7 @@ import {expandHome, normalizePath} from "./utils/paths.js";
 
 import {handleLocateJavaClass, locateJavaClassTool} from "./functions/locateJavaClass.js";
 import {createJavaClass, createJavaClassTool} from "./functions/createJavaClass.js";
+import {javaCodebaseRetrieve, javaCodebaseRetrieveTool} from "./functions/javaCodebaseRetrieve.js";
 import {classRewriteFullTool, rewriteClassFull} from "./functions/classRewriteFull.js";
 import {classAddContent, classAddContentTool} from "./functions/classAddContent.js";
 import {classReplaceContent, classReplaceContentTool} from "./functions/classReplaceContent.js";
@@ -68,6 +69,7 @@ class TestingServer {
                 }
             }, locateJavaClassTool,
                 createJavaClassTool,
+                javaCodebaseRetrieveTool,
                 classAddContentTool,
                 classReplaceContentTool,
                 classDeleteContentTool,
@@ -78,6 +80,10 @@ class TestingServer {
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (request.params.name === "locate_java_class")
                 return handleLocateJavaClass(projectPath, request.params.arguments)
+                    .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
+
+            if (request.params.name === "java_codebase_retrieve")
+                return javaCodebaseRetrieve(projectPath, request.params.arguments)
                     .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
             if (request.params.name === "create_java_class")
