@@ -11,7 +11,7 @@ const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
 export const ClassDeleteContentSchema = ClassLocationSchema.extend({
-    targetContent: z.string().min(1)
+    content: z.string().min(1)
         .describe('The content to delete from the class file'),
     dryRun: z.boolean().default(false)
         .describe('Preview changes using git-style diff format')
@@ -50,7 +50,7 @@ export async function classDeleteContent(
         }
 
         const edits = [{
-            oldText: parsed.data.targetContent,
+            oldText: parsed.data.content,
             newText: ''
         }];
 

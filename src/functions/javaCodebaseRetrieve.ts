@@ -9,7 +9,7 @@ import {getJavaRootPath} from "../utils/javaFileSearch.js";
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
-export const JavaCodebaseRetrieveSchema = ClassLocationSchema.extend({
+export const JavaCodebaseRetrieveSchema = z.object({
     package: z.string().min(1)
         .describe('Java package name from where to scan from java files'),
     scope: z.enum(['all', 'main', 'test'])

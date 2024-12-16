@@ -96,7 +96,7 @@ class TestingServer {
 
             if (request.params.name === "class_add_content")
                 return classAddContent(projectPath, request.params.arguments)
-                    .then(result => ({content: [{type: "text", text: result}]}));
+                    .then(result => ({content: [{type: "text", text: JSON.stringify(result)}]}));
 
             if (request.params.name === "class_replace_content")
                 return classReplaceContent(projectPath, request.params.arguments)
