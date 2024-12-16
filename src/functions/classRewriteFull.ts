@@ -6,7 +6,7 @@ import path from "path";
 import {ClassLocationSchema} from "./locateJavaClass.js";
 import {getJavaRootPath, searchInDirectory} from "../utils/javaFileSearch.js";
 
-const MAX_FILE_SIZE = 5 * 1024; // 15KB
+const MAX_FILE_SIZE = 15 * 1024; // 15KB
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
