@@ -16,7 +16,7 @@ import {classDeleteContent, classDeleteContentTool} from "./functions/classDelet
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
-    console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
+    console.error("Usage: mcp-server <project-path> <log-directory>");
     process.exit(1);
 }
 

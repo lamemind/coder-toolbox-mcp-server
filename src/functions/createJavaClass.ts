@@ -2,7 +2,6 @@ import {z} from "zod";
 import {zodToJsonSchema} from "zod-to-json-schema";
 import path from 'path';
 import fs from 'fs/promises';
-import {ClassLocationSchema} from "./locateJavaClass.js";
 import {ErrorCode, McpError, ToolSchema} from "@modelcontextprotocol/sdk/types.js";
 import {getJavaRootPath} from "../utils/javaFileSearch.js";
 

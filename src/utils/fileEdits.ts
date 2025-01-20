@@ -5,7 +5,7 @@ import fs from "fs/promises";
  * Normalizes line endings to \n
  */
 export function normalizeLineEndings(text: string): string {
-    return text.replace(/\r\n/g, '\n');
+    return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
 /**
